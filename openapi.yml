@@ -1,0 +1,440 @@
+openapi: 3.0.3
+info:
+  title: Flask template API
+  version: 0.0.1
+  description: |
+    Flask API Template is a ready-to-use Flask microservice template
+    designed to accelerate the development of RESTful microservices.
+
+    Template Features:
+    - REST Architecture: Modular and organized project structure
+    - Database Management: SQLAlchemy with Alembic migrations
+    - Data Validation: Marshmallow schemas for serialization/deserialization
+    - Flexible Configuration: Multi-environment support (dev, test, staging, production)
+    - Monitoring: Health check and version endpoints
+    - Containerization: Ready-to-use Docker configuration
+    - Testing: Test structure with pytest and coverage
+    - Documentation: Integrated OpenAPI/Swagger
+    - Logging: Configurable logging system
+    
+    This template allows you to quickly start developing a new microservice
+    by providing a solid foundation and ready-to-use best practices.
+
+  contact:
+      name: Flask template API Support
+      email: contact@waterfall-project.pro
+  license:
+    name: AGPL v3 / Commercial
+    url: https://github.com/bengeek06/flask_api_template/blob/main/LICENSE
+
+servers:
+  - url: http://localhost:5002
+    description: Staging development server
+  - url: http://localhost:5000
+    description: Local development server
+  
+security:
+  - JWTAuth: []
+
+components:
+  securitySchemes:
+    JWTAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token passed via HTTP-only cookies for authentication and authorization
+
+  schemas:
+
+    Dummy:
+      type: object
+      required:
+        - name
+      properties:
+        id:
+          type: integer
+          readOnly: true
+          description: Unique identifier of the dummy
+        name:
+          type: string
+          maxLength: 50
+          description: Name of the dummy entity
+        description:
+          type: string
+          maxLength: 200
+          description: Optional description of the dummy entity
+
+    DummyCreate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 50
+          description: Name of the dummy entity
+        description:
+          type: string
+          maxLength: 200
+          description: Optional description of the dummy entity
+
+    DummyUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 50
+          description: Name of the dummy entity
+        description:
+          type: string
+          maxLength: 200
+          description: Optional description of the dummy entity
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Error message
+        errors:
+          type: object
+          description: Detailed validation errors
+          additionalProperties: true
+      required:
+        - message
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        service:
+          type: string
+          example: template_service
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+          example: "1.0.0"
+        environment:
+          type: string
+          enum: [development, testing, staging, production]
+        checks:
+          type: object
+          properties:
+            database:
+              type: object
+              properties:
+                healthy:
+                  type: boolean
+                message:
+                  type: string
+                response_time_ms:
+                  type: number
+                  format: float
+
+
+
+    VersionResponse:
+      type: object
+      properties:
+        version:
+          type: string
+          example: "1.0.0"
+      required:
+        - version
+
+    ConfigResponse:
+      type: object
+      properties:
+        env:
+          type: string
+          enum: [development, testing, staging, production]
+        debug:
+          type: boolean
+        database_url:
+          type: string
+          description: Database connection URL (sensitive info masked)
+
+  responses:
+
+    DummyCreated:
+      description: Dummy created successfully
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Dummy'
+
+    DummyList:
+      description: List of dummies
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/Dummy'
+
+    DummyDetails:
+      description: Dummy details
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Dummy'
+
+    DummyUpdated:
+      description: Dummy updated successfully
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Dummy'
+
+    DummyDeleted:
+      description: Dummy deleted successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Dummy deleted successfully"
+
+    Unauthorized:
+      description: Missing, invalid, or expired JWT token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Missing or invalid JWT token"
+
+    BadRequest:
+      description: Invalid request data or malformed UUIDs
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Invalid input data"
+
+    NotFound:
+      description: Resource not found within company context
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Resource not found"
+
+    Conflict:
+      description: Resource already exists or constraint violation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Resource already exists"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Internal server error"
+
+    Forbidden:
+      description: Valid authentication but insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Access denied - insufficient permissions"
+
+
+paths:
+
+  /dummies:
+    get:
+      tags: [Dummy]
+      summary: List all dummies
+      description: Returns the list of all dummy entities
+      responses:
+        '200':
+          $ref: '#/components/responses/DummyList'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags: [Dummy]
+      summary: Create a new dummy
+      description: Creates a new dummy entity with the provided data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DummyCreate'
+      responses:
+        '201':
+          $ref: '#/components/responses/DummyCreated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /dummies/{dummy_id}:
+    parameters:
+      - name: dummy_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Unique identifier of the dummy
+
+    get:
+      tags: [Dummy]
+      summary: Get a dummy by ID
+      description: Returns details of a specific dummy entity
+      responses:
+        '200':
+          $ref: '#/components/responses/DummyDetails'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      tags: [Dummy]
+      summary: Update a dummy
+      description: Fully updates an existing dummy entity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DummyUpdate'
+      responses:
+        '200':
+          $ref: '#/components/responses/DummyUpdated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    patch:
+      tags: [Dummy]
+      summary: Partially update a dummy
+      description: Partially updates an existing dummy entity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DummyUpdate'
+      responses:
+        '200':
+          $ref: '#/components/responses/DummyUpdated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags: [Dummy]
+      summary: Delete a dummy
+      description: Deletes an existing dummy entity
+      responses:
+        '204':
+          $ref: '#/components/responses/DummyDeleted'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /health:
+    get:
+      tags: [System]
+      summary: Health check endpoint
+      description: Returns comprehensive health information including database connectivity
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /version:
+    get:
+      tags: [System]
+      summary: Get API version
+      description: Returns the current version of the identity Service API
+      responses:
+        '200':
+          description: API version information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /config:
+    get:
+      tags: [System]
+      summary: Get application configuration
+      description: Returns current application configuration (non-sensitive data only)
+      responses:
+        '200':
+          description: Application configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+
+
+
+tags:
+- name: System
+  description: System health, version, and configuration endpoints
+- name: Dummy
+  description: Dummy operations

@@ -1,0 +1,7 @@
+dotenv
+black
+flake8
+pytest
+pytest-cov
+pylint
+pycodestyle
