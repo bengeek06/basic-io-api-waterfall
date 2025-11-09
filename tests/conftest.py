@@ -5,15 +5,15 @@
 
 import os
 from pytest import fixture
-from dotenv import load_dotenv
 import jwt
 from app import create_app
 from app.models.db import db
 
+# Set environment variables for testing
 os.environ["FLASK_ENV"] = "testing"
-load_dotenv(
-    dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env.test")
-)
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+os.environ["JWT_SECRET"] = "test_secret_key_for_testing"
+os.environ["LOG_LEVEL"] = "DEBUG"
 
 
 @fixture
@@ -76,3 +76,29 @@ def create_jwt_token(company_id, user_id):
     jwt_secret = os.environ.get("JWT_SECRET", "test_secret")
     payload = {"company_id": company_id, "user_id": user_id}
     return jwt.encode(payload, jwt_secret, algorithm="HS256")
+
+
+@fixture
+def auth_headers():
+    """Fixture to provide authentication headers with JWT token."""
+    # Use valid UUIDs for testing
+    company_id = "12345678-1234-5678-1234-567812345678"
+    user_id = "87654321-4321-8765-4321-876543218765"
+    token = create_jwt_token(company_id, user_id)
+    
+    def set_cookie(client):
+        """Helper function to set cookie on client."""
+        client.set_cookie('access_token', token)
+    
+    return {
+        "Cookie": f"access_token={token}",
+        "set_cookie": set_cookie,
+        "token": token
+    }
+
+
+@fixture
+def mock_target_service():
+    """Fixture to mock external service responses."""
+    from unittest.mock import Mock
+    return Mock()
