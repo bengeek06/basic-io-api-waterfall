@@ -65,6 +65,8 @@ def _prepare_data(
     enrich_mode: bool,
     tree_mode: bool,
     lookup_config: Optional[Dict[str, Any]],
+    base_url: Optional[str] = None,
+    cookies: Optional[Dict] = None,
 ) -> List[Dict[str, Any]]:
     """Prepare data for export (add IDs, enrich, convert to tree).
 
@@ -73,6 +75,8 @@ def _prepare_data(
         enrich_mode: Whether to enrich with references
         tree_mode: Whether to convert to tree structure
         lookup_config: Custom lookup configuration
+        base_url: Base URL for fetching referenced resources
+        cookies: Authentication cookies for API calls
 
     Returns:
         Prepared data ready for export
@@ -93,6 +97,8 @@ def _prepare_data(
                 record,
                 lookup_config=lookup_config,
                 parent_field=parent_field,
+                base_url=base_url,
+                cookies=cookies,
             )
             for record in data
         ]
@@ -135,8 +141,17 @@ def export_json() -> Response:
         if data is None:
             return {"message": "Target URL must return a JSON array"}, 400
 
+        # Extract base URL for fetching referenced resources
+        # e.g., http://identity_service:5000/customers -> http://identity_service:5000
+        base_url = "/".join(target_url.rstrip("/").split("/")[:-1])
+        
+        # Get cookies from current request for authentication
+        cookies = request.cookies.to_dict() if request.cookies else None
+
         # Prepare data
-        data = _prepare_data(data, enrich_mode, tree_mode, lookup_config)
+        data = _prepare_data(
+            data, enrich_mode, tree_mode, lookup_config, base_url, cookies
+        )
 
         # Generate filename from URL
         resource_name = target_url.rstrip("/").split("/")[-1]
