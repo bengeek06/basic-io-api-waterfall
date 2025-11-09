@@ -1,12 +1,12 @@
 """
-Tests for utility functions in app.utils module.
+Tests for authentication utility functions in app.utils.auth module.
 """
 
 from unittest import mock
 
 import requests
 
-from app.utils import check_access
+from app.utils.auth import check_access
 
 
 class TestCheckAccess:

@@ -1,37 +1,81 @@
 openapi: 3.0.3
 info:
-  title: Flask template API
+  title: Basic I/O Service API
   version: 0.0.1
   description: |
-    Flask API Template is a ready-to-use Flask microservice template
-    designed to accelerate the development of RESTful microservices.
-
-    Template Features:
-    - REST Architecture: Modular and organized project structure
-    - Database Management: SQLAlchemy with Alembic migrations
-    - Data Validation: Marshmallow schemas for serialization/deserialization
-    - Flexible Configuration: Multi-environment support (dev, test, staging, production)
-    - Monitoring: Health check and version endpoints
-    - Containerization: Ready-to-use Docker configuration
-    - Testing: Test structure with pytest and coverage
-    - Documentation: Integrated OpenAPI/Swagger
-    - Logging: Configurable logging system
+    The Basic I/O Service facilitates data import and export operations for the Waterfall platform.
     
-    This template allows you to quickly start developing a new microservice
-    by providing a solid foundation and ready-to-use best practices.
-
-  contact:
-      name: Flask template API Support
+    This service enables seamless migration of data to and from Waterfall by providing:
+    - **Data Export**: Export data from any Waterfall service endpoint to CSV, JSON, or Mermaid format
+    - **Enriched Export**: Automatically add reference metadata for intelligent imports
+    - **Tree Structure Support**: Auto-detect and handle hierarchical data (parent_id fields)
+    - **Data Import**: Import data from CSV, JSON, or Mermaid files to any Waterfall service endpoint
+    - **Intelligent Reference Resolution**: Automatically resolve foreign key references using lookup fields
+    - **Mermaid Diagrams**: Visual export/import with Mermaid syntax for documentation and exploration
+    - **Batch Processing**: Handles large datasets with detailed error reporting
+    - **ID Mapping**: Tracks original and new UUIDs during import operations
+    
+    **Key Innovation - No Import Order Required**:
+    
+    Unlike traditional import tools, this service uses **enriched exports with reference metadata**
+    to automatically resolve foreign key relationships during import. This means:
+    - Export any resource with `enrich=true` to include lookup metadata for FKs
+    - Import in any order - the service resolves references automatically
+    - Special handling for tree structures (parent_id) with topological sorting
+    - Ambiguous or missing references are clearly reported with actionable details
+    
+    **Tree Structure Intelligence**:
+    
+    The service automatically detects hierarchical data structures (presence of parent_id field):
+    - **CSV Export**: Always flat (format limitation), but parent_id preserved
+    - **JSON Export**: Can be flat or nested tree (tree=true) with children arrays
+    - **Mermaid Export**: Always hierarchical diagram (flowchart, graph, or mindmap)
+    - **Import**: Automatically sorts by dependency (parents before children)
+    - **Cycle Detection**: Prevents circular parent references
+    
+    **Mermaid Format Support**:
+    
+    Export and import data as Mermaid diagrams for:
+    - Visual documentation in GitHub, GitLab, VS Code
+    - Interactive data exploration with clickable nodes
+    - Diagram-driven data creation (draw first, import later)
+    - Automatic tree structure visualization
+    
+    **How it works**:
+    1. **Export**: The service detects UUID foreign keys (fields ending with `_id` or `_uuid`)
+       and fetches the referenced resource to extract identifying fields (email, name, etc.)
+    2. **Import**: For each foreign key, the service queries the target system using lookup fields
+       to find the matching resource and replaces the FK with the correct new UUID
+    3. **Resolution**: Exactly 1 match = auto-resolved, 0 matches = missing, >1 matches = ambiguous
+    4. **Tree Handling**: For parent_id, maintains session-based mapping and ensures proper order
+    
+    **Use Cases**:
+    - Migrate user tables, roles, projects, tasks, etc. to/from Waterfall
+    - Export/import category hierarchies and organizational structures
+    - Backup and restore data across environments
+    - Visual data exploration and documentation with Mermaid
+    - Bulk data operations with detailed success/failure reports
+    - No need to worry about import order or dependency graphs
+    
+    **Important Notes**:
+    - All IDs in Waterfall are UUIDs
+    - Enriched exports require JSON format (CSV cannot carry metadata)
+    - Mermaid exports are text/plain, ideal for version control
+    - Tree structures are detected by presence of parent_id or parent_uuid field
+    - Reference resolution uses configurable lookup fields (defaults: email for users, name for most resources)
+    - Authentication via JWT is transparently forwarded to target services
+    - Both endpoints require JWT authentication and access control validation  contact:
+      name: Waterfall Basic I/O Service Support
       email: contact@waterfall-project.pro
   license:
     name: AGPL v3 / Commercial
-    url: https://github.com/bengeek06/flask_api_template/blob/main/LICENSE
+    url: https://github.com/bengeek06/basic-io-api-waterfall/blob/main/LICENSE
 
 servers:
-  - url: http://localhost:5002
-    description: Staging development server
   - url: http://localhost:5000
     description: Local development server
+  - url: http://localhost:5002
+    description: Staging development server
   
 security:
   - JWTAuth: []
@@ -46,49 +90,227 @@ components:
 
   schemas:
 
-    Dummy:
+    ReferenceMetadata:
+      type: object
+      description: |
+        Metadata about a foreign key reference to help resolve it during import.
+        Contains information needed to lookup the referenced resource in the target system.
+      required:
+        - resource_type
+        - original_id
+        - lookup_field
+        - lookup_value
+      properties:
+        resource_type:
+          type: string
+          description: Type of the referenced resource (e.g., 'users', 'projects', 'roles')
+          example: "users"
+        original_id:
+          type: string
+          format: uuid
+          description: Original UUID of the referenced resource in the source system
+          example: "c3d4e5f6-a7b8-4c5d-0e1f-2a3b4c5d6e7f"
+        lookup_field:
+          type: string
+          description: Field name to use for looking up the resource in target system
+          example: "email"
+        lookup_value:
+          type: string
+          description: Value to search for in the lookup field
+          example: "john.doe@example.com"
+        additional_context:
+          type: object
+          description: Optional additional fields to help with disambiguation
+          additionalProperties:
+            type: string
+          example:
+            company_name: "Acme Corp"
+            department: "Engineering"
+
+    EnrichedRecord:
+      type: object
+      description: |
+        A data record with enriched reference metadata for intelligent import.
+        The _references field contains lookup information for all foreign key fields.
+      properties:
+        _original_id:
+          type: string
+          format: uuid
+          description: Original UUID from the source system
+          example: "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d"
+        _references:
+          type: object
+          description: |
+            Metadata for resolving foreign key references during import.
+            Key: field name (e.g., 'project_id', 'assigned_to')
+            Value: ReferenceMetadata object
+          additionalProperties:
+            $ref: '#/components/schemas/ReferenceMetadata'
+          example:
+            project_id:
+              resource_type: "projects"
+              original_id: "e5f6a7b8-c9d0-4e1f-2a3b-4c5d6e7f8a9b"
+              lookup_field: "name"
+              lookup_value: "Waterfall Platform"
+            assigned_to:
+              resource_type: "users"
+              original_id: "c3d4e5f6-a7b8-4c5d-0e1f-2a3b4c5d6e7f"
+              lookup_field: "email"
+              lookup_value: "john.doe@example.com"
+      additionalProperties: true
+
+    ReferenceResolution:
+      type: object
+      description: Information about how a reference was resolved or why it failed
+      required:
+        - field
+        - status
+      properties:
+        field:
+          type: string
+          description: The foreign key field name
+          example: "assigned_to"
+        status:
+          type: string
+          enum: [resolved, ambiguous, missing, error]
+          description: |
+            - resolved: Successfully found exactly one match
+            - ambiguous: Multiple matches found, user input needed
+            - missing: No match found in target system
+            - error: Error during lookup
+        resolved_id:
+          type: string
+          format: uuid
+          description: The new UUID assigned (only for 'resolved' status)
+          example: "new-uuid-123"
+        lookup_attempted:
+          type: string
+          description: The lookup query that was attempted
+          example: "email=john.doe@example.com"
+        candidates:
+          type: array
+          description: List of possible matches (for 'ambiguous' status)
+          items:
+            type: object
+            additionalProperties: true
+          example:
+            - id: "uuid-1"
+              email: "john.doe@example.com"
+              name: "John Doe (Admin)"
+            - id: "uuid-2"
+              email: "john.doe@example.com"
+              name: "John Doe (Developer)"
+        error_message:
+          type: string
+          description: Error details (for 'missing' or 'error' status)
+          example: "No user found with email 'john.doe@example.com'"
+
+    ExportResponse:
+      type: string
+      format: binary
+      description: |
+        The exported data file in the requested format (CSV or JSON).
+        - CSV: Comma-separated values with header row
+        - JSON: Array of objects (optionally enriched with _references metadata)
+        The response includes a Content-Disposition header for file download.
+
+    ImportReport:
       type: object
       required:
-        - name
+        - total_records
+        - successful_imports
+        - failed_imports
+        - id_mapping
       properties:
-        id:
+        total_records:
           type: integer
-          readOnly: true
-          description: Unique identifier of the dummy
-        name:
-          type: string
-          maxLength: 50
-          description: Name of the dummy entity
-        description:
-          type: string
-          maxLength: 200
-          description: Optional description of the dummy entity
-
-    DummyCreate:
-      type: object
-      required:
-        - name
-      properties:
-        name:
-          type: string
-          maxLength: 50
-          description: Name of the dummy entity
-        description:
-          type: string
-          maxLength: 200
-          description: Optional description of the dummy entity
-
-    DummyUpdate:
-      type: object
-      properties:
-        name:
-          type: string
-          maxLength: 50
-          description: Name of the dummy entity
-        description:
-          type: string
-          maxLength: 200
-          description: Optional description of the dummy entity
+          description: Total number of records found in the uploaded file
+          example: 150
+        successful_imports:
+          type: integer
+          description: Number of records successfully imported
+          example: 145
+        failed_imports:
+          type: integer
+          description: Number of records that failed to import
+          example: 5
+        auto_resolved_references:
+          type: integer
+          description: Number of foreign key references automatically resolved
+          example: 280
+        ambiguous_references:
+          type: integer
+          description: Number of references with multiple matches (skipped or needs resolution)
+          example: 3
+        missing_references:
+          type: integer
+          description: Number of references not found in target system
+          example: 2
+        id_mapping:
+          type: object
+          description: |
+            Mapping of original UUIDs to newly created UUIDs.
+            Key: original UUID from the import file
+            Value: new UUID assigned by the target service
+          additionalProperties:
+            type: string
+          example:
+            "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d": "new-uuid-1"
+            "b2c3d4e5-f6a7-4b5c-9d0e-1f2a3b4c5d6e": "new-uuid-2"
+        reference_resolutions:
+          type: array
+          description: Detailed information about all reference resolution attempts
+          items:
+            type: object
+            properties:
+              record_index:
+                type: integer
+              record_name:
+                type: string
+                description: Human-readable identifier of the record
+              resolutions:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReferenceResolution'
+        errors:
+          type: array
+          description: Detailed information about records that failed to import
+          items:
+            type: object
+            properties:
+              record_index:
+                type: integer
+                description: Index of the record in the import file (0-based)
+                example: 23
+              original_id:
+                type: string
+                description: Original ID from the import file (if present)
+                example: "42"
+              error_message:
+                type: string
+                description: Detailed error message from the target service
+                example: "Validation error: email field is required"
+              http_status:
+                type: integer
+                description: HTTP status code returned by the target service
+                example: 400
+        warnings:
+          type: array
+          description: Non-critical issues encountered during import
+          items:
+            type: object
+            properties:
+              record_index:
+                type: integer
+                example: 15
+              message:
+                type: string
+                example: "Field 'created_at' was ignored by target service"
+        duration_seconds:
+          type: number
+          format: float
+          description: Total time taken for the import operation
+          example: 12.45
 
     ErrorResponse:
       type: object
@@ -160,46 +382,226 @@ components:
 
   responses:
 
-    DummyCreated:
-      description: Dummy created successfully
+    ExportSuccess:
+      description: Data exported successfully as a downloadable file
+      headers:
+        Content-Disposition:
+          schema:
+            type: string
+            example: 'attachment; filename="users_export.csv"'
+          description: Indicates the file should be downloaded with the suggested filename
+        Content-Type:
+          schema:
+            type: string
+            enum:
+              - text/csv
+              - application/json
+              - text/plain
+          description: MIME type of the exported data (text/plain for Mermaid)
       content:
+        text/csv:
+          schema:
+            type: string
+            format: binary
+          examples:
+            flat_list:
+              summary: CSV export (always flat, even for tree structures)
+              value: |
+                _original_id,name,parent_id,status
+                a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d,Backend,,active
+                b2c3d4e5-f6a7-4b5c-9d0e-1f2a3b4c5d6e,API,a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d,active
+                c3d4e5f6-a7b8-4c5d-0e1f-2a3b4c5d6e7f,Database,a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d,active
         application/json:
           schema:
-            $ref: '#/components/schemas/Dummy'
+            type: string
+            format: binary
+          examples:
+            simple_export:
+              summary: Simple export without enrichment
+              value: |
+                [
+                  {"_original_id": "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d", "name": "John Doe", "email": "john@example.com"},
+                  {"_original_id": "b2c3d4e5-f6a7-4b5c-9d0e-1f2a3b4c5d6e", "name": "Jane Smith", "email": "jane@example.com"}
+                ]
+            enriched_export:
+              summary: Enriched export with reference metadata (enrich=true)
+              value: |
+                [
+                  {
+                    "_original_id": "task-uuid-1",
+                    "name": "Implement feature X",
+                    "project_id": "project-uuid-1",
+                    "assigned_to": "user-uuid-1",
+                    "_references": {
+                      "project_id": {
+                        "resource_type": "projects",
+                        "original_id": "project-uuid-1",
+                        "lookup_field": "name",
+                        "lookup_value": "Waterfall Platform"
+                      },
+                      "assigned_to": {
+                        "resource_type": "users",
+                        "original_id": "user-uuid-1",
+                        "lookup_field": "email",
+                        "lookup_value": "john.doe@example.com"
+                      }
+                    }
+                  }
+                ]
+            tree_structure:
+              summary: Tree structure export (tree=true, for data with parent_id)
+              value: |
+                [
+                  {
+                    "_original_id": "cat-1",
+                    "name": "Backend",
+                    "parent_id": null,
+                    "children": [
+                      {
+                        "_original_id": "cat-2",
+                        "name": "API",
+                        "parent_id": "cat-1",
+                        "children": [
+                          {
+                            "_original_id": "cat-4",
+                            "name": "REST Endpoints",
+                            "parent_id": "cat-2",
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "_original_id": "cat-3",
+                        "name": "Database",
+                        "parent_id": "cat-1",
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+        
+        text/plain:
+          schema:
+            type: string
+          examples:
+            mermaid_flowchart:
+              summary: Mermaid flowchart diagram (type=mermaid&diagram_type=flowchart)
+              value: |
+                %%{init: {'theme':'base'}}%%
+                flowchart TD
+                    %% Metadata
+                    %% export_date: 2025-11-09T10:30:00Z
+                    %% resource_type: categories
+                    %% total_nodes: 4
+                    %% service_url: http://localhost:5001/api/categories
+                    
+                    cat1["Backend<br/>_original_id: cat-1<br/>status: active"]
+                    cat2["API<br/>_original_id: cat-2<br/>status: active"]
+                    cat3["Database<br/>_original_id: cat-3<br/>status: active"]
+                    cat4["REST Endpoints<br/>_original_id: cat-4<br/>status: active"]
+                    
+                    cat1 --> cat2
+                    cat1 --> cat3
+                    cat2 --> cat4
+                    
+                    click cat1 "http://localhost:5001/api/categories/cat-1"
+                    click cat2 "http://localhost:5001/api/categories/cat-2"
+                    click cat3 "http://localhost:5001/api/categories/cat-3"
+                    click cat4 "http://localhost:5001/api/categories/cat-4"
+            
+            mermaid_mindmap:
+              summary: Mermaid mindmap diagram (type=mermaid&diagram_type=mindmap)
+              value: |
+                mindmap
+                  root((Backend))
+                    API
+                      REST Endpoints
+                      GraphQL
+                    Database
+                      PostgreSQL
+                      Redis
 
-    DummyList:
-      description: List of dummies
+    ImportSuccess:
+      description: Data import completed (may include partial failures)
       content:
         application/json:
           schema:
-            type: array
-            items:
-              $ref: '#/components/schemas/Dummy'
-
-    DummyDetails:
-      description: Dummy details
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Dummy'
-
-    DummyUpdated:
-      description: Dummy updated successfully
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Dummy'
-
-    DummyDeleted:
-      description: Dummy deleted successfully
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-                example: "Dummy deleted successfully"
+            $ref: '#/components/schemas/ImportReport'
+          examples:
+            full_success:
+              summary: All records imported successfully with automatic reference resolution
+              value:
+                total_records: 100
+                successful_imports: 100
+                failed_imports: 0
+                auto_resolved_references: 250
+                ambiguous_references: 0
+                missing_references: 0
+                id_mapping:
+                  "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d": "new-uuid-1"
+                  "b2c3d4e5-f6a7-4b5c-9d0e-1f2a3b4c5d6e": "new-uuid-2"
+                reference_resolutions: []
+                errors: []
+                warnings: []
+                duration_seconds: 8.23
+            partial_success:
+              summary: Some records failed with reference resolution issues
+              value:
+                total_records: 50
+                successful_imports: 45
+                failed_imports: 5
+                auto_resolved_references: 85
+                ambiguous_references: 3
+                missing_references: 2
+                id_mapping:
+                  "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d": "new-uuid-1"
+                  "b2c3d4e5-f6a7-4b5c-9d0e-1f2a3b4c5d6e": "new-uuid-2"
+                reference_resolutions:
+                  - record_index: 12
+                    record_name: "Implement feature X"
+                    resolutions:
+                      - field: "assigned_to"
+                        status: "ambiguous"
+                        lookup_attempted: "email=john@example.com"
+                        candidates:
+                          - id: "new-uuid-candidate-1"
+                            email: "john@example.com"
+                            name: "John Doe (Admin)"
+                            company: "Company A"
+                          - id: "new-uuid-candidate-2"
+                            email: "john@example.com"
+                            name: "John Doe (Developer)"
+                            company: "Company B"
+                      - field: "project_id"
+                        status: "resolved"
+                        resolved_id: "new-project-uuid"
+                        lookup_attempted: "name=Waterfall Platform"
+                  - record_index: 15
+                    record_name: "Fix bug Y"
+                    resolutions:
+                      - field: "project_id"
+                        status: "missing"
+                        lookup_attempted: "name=Old Project"
+                        error_message: "No project found with name 'Old Project'"
+                errors:
+                  - record_index: 12
+                    original_id: "task-uuid-13"
+                    error_message: "Skipped due to ambiguous reference: assigned_to"
+                    http_status: null
+                  - record_index: 15
+                    original_id: "task-uuid-16"
+                    error_message: "Skipped due to missing reference: project_id"
+                    http_status: null
+                  - record_index: 23
+                    original_id: "task-uuid-24"
+                    error_message: "Validation error: name is required"
+                    http_status: 400
+                warnings:
+                  - record_index: 5
+                    message: "Field '_original_id' was removed before posting"
+                  - record_index: 12
+                    message: "Record skipped due to unresolved references"
+                duration_seconds: 4.56
 
     Unauthorized:
       description: Missing, invalid, or expired JWT token
@@ -258,121 +660,492 @@ components:
 
 paths:
 
-  /dummies:
+  /export:
     get:
-      tags: [Dummy]
-      summary: List all dummies
-      description: Returns the list of all dummy entities
+      tags: [Import/Export]
+      summary: Export data from a Waterfall service endpoint
+      description: |
+        Fetches data from the specified URL and exports it as a downloadable file in the requested format.
+        
+        **Process**:
+        1. Authenticates with the target URL using the JWT token from the request
+        2. Fetches all data from the target endpoint (GET request)
+        3. Adds an `_original_id` field to preserve original UUIDs
+        4. **Detects data structure**:
+           - Flat list: Standard processing
+           - Tree structure (has `parent_id` field): Special handling based on format
+        5. **If enrich=true**: Analyzes foreign key fields (including `parent_id`) and fetches referenced resource details to build `_references` metadata
+        6. Converts the data to the requested format
+        7. Returns a downloadable file
+        
+        **Tree Structure Detection**:
+        - Automatically detects if data has a `parent_id` or `parent_uuid` field
+        - **CSV**: Always exports as flat list (format limitation)
+        - **JSON with tree=true**: Converts to nested tree structure with `children` arrays
+        - **JSON with tree=false**: Keeps flat list format
+        - **Mermaid**: Always generates hierarchical diagram (flowchart, graph, or mindmap)
+        
+        **Export Enrichment** (recommended for import compatibility):
+        - When `enrich=true`, the service detects UUID foreign keys and adds lookup metadata
+        - Special handling for `parent_id`: treated as internal FK within same resource
+        - For each FK, it fetches the referenced resource and extracts identifying fields
+        - This metadata enables intelligent import with automatic reference resolution
+        - CSV exports cannot include enrichment metadata (use JSON for enriched exports)
+        
+        **Mermaid Export**:
+        - Generates visual diagrams in Mermaid syntax
+        - Supports flowchart (default), graph, and mindmap diagram types
+        - Includes metadata in comments for import compatibility
+        - Ideal for documentation and visual data exploration
+        - Can be rendered in GitHub, GitLab, VS Code, and other Markdown viewers
+        
+        **Important**:
+        - All IDs in Waterfall are UUIDs
+        - The target URL must be a Waterfall service endpoint
+        - Authentication is forwarded via HTTP-only cookie
+        - No size limits on export data
+      
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+          description: Target Waterfall service endpoint URL to export data from
+          example: "http://localhost:5001/api/categories"
+        
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [json, csv, mermaid]
+            default: json
+          description: |
+            Export format:
+            - json: Standard JSON (flat or tree based on 'tree' parameter)
+            - csv: Comma-separated values (always flat)
+            - mermaid: Mermaid diagram syntax (automatically hierarchical for tree structures)
+          example: "json"
+        
+        - name: tree
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: |
+            Convert flat list to nested tree structure (JSON only).
+            Only applies when data has a parent_id field.
+            Ignored for CSV (always flat) and Mermaid (always hierarchical).
+            When true, creates nested objects with 'children' arrays.
+          example: true
+        
+        - name: diagram_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [flowchart, graph, mindmap]
+            default: flowchart
+          description: |
+            Type of Mermaid diagram to generate (only for type=mermaid):
+            - flowchart: Traditional flowchart with directional arrows (best for processes)
+            - graph: Graph visualization with nodes and edges (best for relationships)
+            - mindmap: Mind map style (best for hierarchical concepts)
+          example: "flowchart"
+        
+        - name: enrich
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: |
+            Add reference metadata for intelligent import (JSON only).
+            When true, the service detects foreign keys and adds `_references` with lookup information.
+            Highly recommended for exports that will be imported to ensure automatic reference resolution.
+          example: true
+        
+        - name: lookup_config
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            Optional JSON string defining custom lookup fields for specific resource types.
+            Format: {"users": ["email"], "projects": ["name", "company_id"]}
+            If not provided, default conventions are used (email for users, name for most resources).
+          example: '{"users":["email"],"projects":["name"]}'
+      
       responses:
         '200':
-          $ref: '#/components/responses/DummyList'
+          $ref: '#/components/responses/ExportSuccess'
+        
+        '400':
+          description: Invalid parameters (malformed URL or unsupported type)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_url:
+                  value:
+                    message: "Invalid URL parameter"
+                unsupported_type:
+                  value:
+                    message: "Unsupported export type. Allowed values: json, csv, mermaid"
+                invalid_diagram_type:
+                  value:
+                    message: "Invalid diagram_type. Allowed values: flowchart, graph, mindmap"
+        
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        
+        '502':
+          description: Target service is unreachable or returned an error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                unreachable:
+                  value:
+                    message: "Failed to fetch data from target URL: Connection refused"
+                auth_error:
+                  value:
+                    message: "Authentication failed on target service"
+        
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /import:
     post:
-      tags: [Dummy]
-      summary: Create a new dummy
-      description: Creates a new dummy entity with the provided data
+      tags: [Import/Export]
+      summary: Import data to a Waterfall service endpoint
+      description: |
+        Uploads a file (CSV, JSON, or Mermaid) and imports its contents to the specified target URL by making successive POST requests.
+        Automatically resolves foreign key references (including parent_id for tree structures) using enriched metadata when available.
+        
+        **Process**:
+        1. Parses the uploaded file (CSV, JSON, or Mermaid)
+        2. **Tree Structure Detection**: If data contains `parent_id` field:
+           - Performs topological sort to ensure parents are imported before children
+           - Tracks parent_id mappings (original UUID → new UUID)
+           - Resolves parent_id references using the same logic as other FKs
+        3. For each record (in dependency order for trees):
+           - **Intelligent Reference Resolution**: If `_references` metadata is present, attempts to resolve foreign keys:
+             * Special handling for `parent_id`: checks if parent already imported in current session
+             * For other FKs: queries target service with lookup fields (e.g., GET /api/users?email=john@example.com)
+             * If exactly 1 match: automatically replaces FK with new UUID
+             * If 0 matches: marks as "missing reference" and skips record (or continues based on config)
+             * If >1 matches: marks as "ambiguous reference" and skips record
+           - Removes the `_original_id`, `_references`, and `children` fields (for tree imports)
+           - Makes a POST request to the target URL with resolved references
+           - Tracks the new UUID returned by the target service
+           - Maps original UUID → new UUID for reference
+           - Handles errors gracefully (skips failed records, continues with successful ones)
+        3. Returns a detailed import report with:
+           - ID mappings (original → new UUIDs)
+           - Reference resolution statistics
+           - Detailed errors for ambiguous/missing references
+           - Success/failure counts
+        
+        **Automatic Reference Resolution** (when using enriched exports):
+        - No need to import in specific order (even for tree structures)!
+        - Foreign keys are automatically resolved using lookup fields
+        - `parent_id` is treated as a special internal FK and resolved from current import session
+        - Ambiguous references (multiple matches) are reported for user review
+        - Missing references (no matches) are reported with suggestions
+        
+        **Tree Structure Import**:
+        - JSON tree format (with `children` arrays) is automatically flattened
+        - Topological sort ensures parents are imported before children
+        - Parent UUID mappings are tracked throughout the import session
+        - Orphaned nodes (missing parent) are handled like missing FK references
+        - Cycles detection prevents infinite loops
+        
+        **Mermaid Import**:
+        - Parses Mermaid diagram syntax (flowchart, graph, mindmap)
+        - Extracts nodes and relationships from diagram
+        - Reconstructs parent_id relationships from arrows/edges
+        - Supports metadata in comments for field values
+        - Ideal for importing data created visually in diagram tools
+        
+        **Important**:
+        - All IDs in Waterfall are UUIDs
+        - All POST requests are synchronous
+        - Failed/skipped records don't block successful imports
+        - For best results, use enriched exports (`enrich=true`)
+        - Authentication is forwarded via HTTP-only cookie
+      
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+          description: Target Waterfall service endpoint URL to import data to
+          example: "http://localhost:5001/api/tasks"
+        
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [json, csv, mermaid]
+            default: json
+          description: |
+            Format of the uploaded file:
+            - json: Standard JSON (flat list or tree structure)
+            - csv: CSV file (always flat)
+            - mermaid: Mermaid diagram syntax
+          example: "json"
+        
+        - name: skip_on_ambiguous
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: |
+            Skip records with ambiguous references (multiple matches).
+            If false, import will fail with error report when ambiguities are found.
+          example: true
+        
+        - name: skip_on_missing
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: |
+            Skip records with missing references (no matches).
+            If false, import will fail with error report when references are missing.
+          example: true
+        
+        - name: detect_cycles
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: |
+            Detect and prevent circular parent_id references in tree structures.
+            When true, import will fail if cycles are detected.
+            When false, cycles may cause import failures or unexpected behavior.
+          example: true
+        
+        - name: lookup_config
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            Optional JSON string defining custom lookup fields for reference resolution.
+            Overrides default conventions. Format: {"users": ["email"], "projects": ["name", "company_id"]}
+          example: '{"users":["email"],"projects":["name"]}'
+      
       requestBody:
         required: true
         content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The data file to import (CSV or JSON format)
+          
           application/json:
             schema:
-              $ref: '#/components/schemas/DummyCreate'
-      responses:
-        '201':
-          $ref: '#/components/responses/DummyCreated'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  /dummies/{dummy_id}:
-    parameters:
-      - name: dummy_id
-        in: path
-        required: true
-        schema:
-          type: integer
-        description: Unique identifier of the dummy
-
-    get:
-      tags: [Dummy]
-      summary: Get a dummy by ID
-      description: Returns details of a specific dummy entity
-      responses:
-        '200':
-          $ref: '#/components/responses/DummyDetails'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-    put:
-      tags: [Dummy]
-      summary: Update a dummy
-      description: Fully updates an existing dummy entity
-      requestBody:
-        required: true
-        content:
-          application/json:
+              type: array
+              items:
+                type: object
+              description: Alternative - send JSON data directly in request body
+            examples:
+              users_import_simple:
+                summary: Simple import without references
+                value:
+                  - _original_id: "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d"
+                    name: "John Doe"
+                    email: "john@example.com"
+                  - _original_id: "b2c3d4e5-f6a7-4b5c-9d0e-1f2a3b4c5d6e"
+                    name: "Jane Smith"
+                    email: "jane@example.com"
+              tasks_import_enriched:
+                summary: Enriched import with reference metadata
+                value:
+                  - _original_id: "task-uuid-1"
+                    name: "Implement feature X"
+                    project_id: "project-uuid-1"
+                    assigned_to: "user-uuid-1"
+                    _references:
+                      project_id:
+                        resource_type: "projects"
+                        original_id: "project-uuid-1"
+                        lookup_field: "name"
+                        lookup_value: "Waterfall Platform"
+                      assigned_to:
+                        resource_type: "users"
+                        original_id: "user-uuid-1"
+                        lookup_field: "email"
+                        lookup_value: "john.doe@example.com"
+          
+          text/csv:
             schema:
-              $ref: '#/components/schemas/DummyUpdate'
-      responses:
-        '200':
-          $ref: '#/components/responses/DummyUpdated'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-    patch:
-      tags: [Dummy]
-      summary: Partially update a dummy
-      description: Partially updates an existing dummy entity
-      requestBody:
-        required: true
-        content:
-          application/json:
+              type: string
+              format: binary
+              description: Alternative - send CSV data directly in request body
+            examples:
+              users_import:
+                value: "_original_id,name,email\na1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d,John Doe,john@example.com\nb2c3d4e5-f6a7-4b5c-9d0e-1f2a3b4c5d6e,Jane Smith,jane@example.com"
+              tree_structure_csv:
+                summary: Tree structure CSV import
+                value: "_original_id,name,parent_id\ncat-1,Backend,\ncat-2,API,cat-1\ncat-3,Database,cat-1"
+          
+          text/plain:
             schema:
-              $ref: '#/components/schemas/DummyUpdate'
+              type: string
+              description: Mermaid diagram syntax
+            examples:
+              mermaid_flowchart:
+                summary: Mermaid flowchart import
+                value: |
+                  flowchart TD
+                      backend["Backend"] --> api["API"]
+                      backend --> database["Database"]
+                      api --> rest["REST Endpoints"]
+              mermaid_mindmap:
+                summary: Mermaid mindmap import
+                value: |
+                  mindmap
+                    root((Backend))
+                      API
+                        REST Endpoints
+                        GraphQL
+                      Database
+                        PostgreSQL
+      
       responses:
         '200':
-          $ref: '#/components/responses/DummyUpdated'
+          $ref: '#/components/responses/ImportSuccess'
+        
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: Invalid parameters or malformed file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_url:
+                  summary: Invalid or missing URL parameter
+                  value:
+                    message: "Invalid URL parameter"
+                
+                missing_file:
+                  summary: No file uploaded
+                  value:
+                    message: "No file provided in request"
+                
+                unsupported_type:
+                  summary: Unsupported file type
+                  value:
+                    message: "Unsupported import type. Allowed values: json, csv, mermaid"
+                
+                circular_reference:
+                  summary: Circular parent_id reference detected
+                  value:
+                    message: "Circular reference detected in tree structure"
+                    errors:
+                      type: "CircularReferenceError"
+                      details: "Node 'cat-3' has parent 'cat-2', which has parent 'cat-1', which has parent 'cat-3'"
+                      cycle: ["cat-1", "cat-2", "cat-3", "cat-1"]
+                
+                csv_parse_error_delimiter:
+                  summary: CSV parsing error - invalid delimiter or structure
+                  value:
+                    message: "Failed to parse CSV file: Error could not convert string to float"
+                    errors:
+                      type: "csv.Error"
+                      line: 15
+                      details: "Expected 5 columns, found 3"
+                
+                csv_parse_error_encoding:
+                  summary: CSV encoding error
+                  value:
+                    message: "Failed to parse CSV file: 'utf-8' codec can't decode byte 0xff in position 10"
+                    errors:
+                      type: "UnicodeDecodeError"
+                      details: "File encoding is not UTF-8. Please convert to UTF-8 before importing."
+                
+                csv_empty_file:
+                  summary: CSV file is empty or has no data rows
+                  value:
+                    message: "Failed to parse CSV file: No data rows found"
+                    errors:
+                      type: "ValueError"
+                      details: "CSV file must contain at least a header row and one data row"
+                
+                json_parse_error_syntax:
+                  summary: JSON syntax error
+                  value:
+                    message: "Failed to parse JSON file: Expecting ',' delimiter: line 5 column 10 (char 89)"
+                    errors:
+                      type: "json.JSONDecodeError"
+                      line: 5
+                      column: 10
+                      position: 89
+                      details: "Invalid JSON syntax. Check for missing commas, quotes, or brackets."
+                
+                json_parse_error_not_array:
+                  summary: JSON is not an array
+                  value:
+                    message: "Failed to parse JSON file: Expected array of objects, got object"
+                    errors:
+                      type: "ValueError"
+                      details: "JSON file must contain an array of objects, e.g., [{...}, {...}]"
+                
+                json_empty_array:
+                  summary: JSON array is empty
+                  value:
+                    message: "Failed to parse JSON file: No records found in array"
+                    errors:
+                      type: "ValueError"
+                      details: "JSON array must contain at least one object"
+                
+                mermaid_parse_error:
+                  summary: Mermaid syntax error
+                  value:
+                    message: "Failed to parse Mermaid diagram: Invalid syntax at line 3"
+                    errors:
+                      type: "MermaidParseError"
+                      line: 3
+                      details: "Expected node definition or edge, found invalid token"
+        
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-    delete:
-      tags: [Dummy]
-      summary: Delete a dummy
-      description: Deletes an existing dummy entity
-      responses:
-        '204':
-          $ref: '#/components/responses/DummyDeleted'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
+        
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        
+        '502':
+          description: Target service is unreachable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: "Failed to connect to target URL: Connection timeout"
+        
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -434,7 +1207,31 @@ paths:
 
 
 tags:
+- name: Import/Export
+  description: |
+    Data import and export operations for Waterfall services with intelligent reference resolution and tree structure support.
+    
+    These endpoints facilitate bulk data migration by:
+    - Exporting data from any Waterfall service endpoint to CSV, JSON, or Mermaid format
+    - **Enriching exports** with reference metadata for automatic FK resolution
+    - **Tree structure detection** and conversion (parent_id fields)
+    - Importing data from CSV, JSON, or Mermaid files to any Waterfall service endpoint
+    - **Automatically resolving** foreign key references using lookup fields (email, name, etc.)
+    - **Parent_id resolution** with topological sorting (parents imported before children)
+    - **Mermaid support** for visual documentation and diagram-driven data creation
+    - Tracking UUID mappings between original and newly created records
+    - Providing detailed reports on import success/failure rates and reference resolutions
+    - **No import order required** when using enriched exports
+    
+    **Workflow**:
+    1. Export with `enrich=true` to include reference metadata
+    2. Choose format: JSON (flat/tree), CSV (flat only), or Mermaid (visual)
+    3. Import in any order - references are resolved automatically
+    4. Review resolution report for any ambiguous or missing references
+    
+    **Tree Structure Workflows**:
+    - **JSON Tree**: Export with `tree=true` for nested structure, import flattens automatically
+    - **CSV**: Export/import flat with parent_id column, service handles ordering
+    - **Mermaid**: Export as flowchart/mindmap, import reconstructs parent_id from diagram
 - name: System
   description: System health, version, and configuration endpoints
-- name: Dummy
-  description: Dummy operations
