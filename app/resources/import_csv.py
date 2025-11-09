@@ -7,10 +7,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 from flask import request
-from flask_restful import Resource
 
 from app.logger import logger
-from app.utils.auth import require_jwt_auth
 from app.utils.reference_resolver import (
     detect_tree_structure,
     flatten_tree,
@@ -19,12 +17,9 @@ from app.utils.reference_resolver import (
 )
 
 
-class ImportCsvResource(Resource):
-    """Resource for importing data in CSV format."""
+# Functions for CSV import
 
-    def _parse_csv_file(
-        self, file
-    ) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
+def _parse_csv_file(file) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
         """Parse and validate uploaded CSV file.
 
         Args:
@@ -53,7 +48,7 @@ class ImportCsvResource(Resource):
             # Convert CSV strings back to appropriate types
             parsed_data = []
             for row in data:
-                parsed_row = self._parse_csv_row(row)
+                parsed_row = _parse_csv_row(row)
                 parsed_data.append(parsed_row)
 
             return parsed_data, None
@@ -63,7 +58,7 @@ class ImportCsvResource(Resource):
         except csv.Error as exc:
             return None, f"Invalid CSV format: {exc}"
 
-    def _parse_csv_row(self, row: Dict[str, str]) -> Dict[str, Any]:
+def _parse_csv_row(row: Dict[str, str]) -> Dict[str, Any]:
         """Parse a CSV row and convert types.
 
         CSV stores everything as strings. This converts:
@@ -93,8 +88,8 @@ class ImportCsvResource(Resource):
 
         return parsed
 
-    def _prepare_data(
-        self, data: List[Dict[str, Any]]
+def _prepare_data(
+        data: List[Dict[str, Any]]
     ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
         """Prepare data for import (flatten tree if needed, sort by dependencies).
 
@@ -122,8 +117,7 @@ class ImportCsvResource(Resource):
 
         return data, parent_field
 
-    def _import_records(
-        self,
+def _import_records(
         data: List[Dict[str, Any]],
         target_url: str,
         cookies: Dict[str, str],
@@ -170,7 +164,7 @@ class ImportCsvResource(Resource):
 
                 # Resolve foreign key references if requested
                 if resolve_fks and "_references" in record:
-                    self._resolve_references(
+                    _resolve_references(
                         clean_record,
                         record["_references"],
                         target_url,
@@ -212,8 +206,7 @@ class ImportCsvResource(Resource):
             "id_mapping": id_mapping,
         }
 
-    def _resolve_references(
-        self,
+def _resolve_references(
         record: Dict[str, Any],
         references: Dict[str, Any],
         target_url: str,
@@ -264,8 +257,8 @@ class ImportCsvResource(Resource):
                     {"field": field_name, "value": field_value, "status": "missing"}
                 )
 
-    @require_jwt_auth()
-    def post(self):
+    #
+def import_csv():
         """Import data from CSV file.
 
         Form Parameters:
@@ -295,18 +288,18 @@ class ImportCsvResource(Resource):
                 return {"error": "Missing 'url' parameter"}, 400
 
             # Parse CSV file
-            data, error = self._parse_csv_file(file)
+            data, error = _parse_csv_file(file)
             if error:
                 return {"error": error}, 400
 
             logger.info(f"Parsed {len(data)} records from CSV")
 
             # Prepare data
-            prepared_data, parent_field = self._prepare_data(data)
+            prepared_data, parent_field = _prepare_data(data)
 
             # Import to target service
             cookies = {"access_token": request.cookies.get("access_token")}
-            result = self._import_records(
+            result = _import_records(
                 prepared_data, target_url, cookies, resolve_fks, parent_field
             )
 

@@ -13,7 +13,7 @@ class TestImportCsvResource:
         """Test error when no file is provided."""
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import-csv",
+            "/import?type=csv",
             data={"url": "http://localhost:5001/api/users"},
         )
         assert response.status_code == 400
@@ -24,7 +24,7 @@ class TestImportCsvResource:
         """Test that request without JWT returns 401."""
         csv_content = "_original_id,name\nold-1,Alice\n"
         response = client.post(
-            "/import-csv",
+            "/import?type=csv",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(csv_content.encode()), "data.csv"),
@@ -36,7 +36,7 @@ class TestImportCsvResource:
         """Test error when filename is empty."""
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import-csv",
+            "/import?type=csv",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(b""), ""),
@@ -50,7 +50,7 @@ class TestImportCsvResource:
         """Test error when file is not CSV."""
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import-csv",
+            "/import?type=csv",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(b"test data"), "data.txt"),
@@ -65,7 +65,7 @@ class TestImportCsvResource:
         csv_content = "_original_id,name\nold-1,Alice\n"
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import-csv",
+            "/import?type=csv",
             data={
                 "file": (io.BytesIO(csv_content.encode()), "data.csv"),
             },
@@ -79,7 +79,7 @@ class TestImportCsvResource:
         csv_content = ""
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import-csv",
+            "/import?type=csv",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(csv_content.encode()), "data.csv"),
@@ -125,7 +125,7 @@ class TestImportCsvResource:
 
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import-csv",
+            "/import?type=csv",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(csv_content), "data.csv"),
@@ -163,7 +163,7 @@ class TestImportCsvResource:
 
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import-csv",
+            "/import?type=csv",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(csv_content), "data.csv"),
@@ -200,7 +200,7 @@ class TestImportCsvResource:
 
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import-csv",
+            "/import?type=csv",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(csv_content), "data.csv"),
@@ -245,7 +245,7 @@ class TestImportCsvResource:
 
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import-csv",
+            "/import?type=csv",
             data={
                 "url": "http://localhost:5001/api/org_units",
                 "file": (io.BytesIO(csv_content), "data.csv"),
@@ -277,7 +277,7 @@ class TestImportCsvResource:
         csv_content = "_original_id,name\nold-1,Alice\n"
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import-csv",
+            "/import?type=csv",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(csv_content.encode()), "data.csv"),
@@ -330,7 +330,7 @@ class TestImportCsvResource:
 
             auth_headers["set_cookie"](client)
             response = client.post(
-                "/import-csv",
+                "/import?type=csv",
                 data={
                     "url": "http://localhost:5001/api/tasks",
                     "file": (io.BytesIO(csv_content), "data.csv"),
@@ -367,7 +367,7 @@ class TestImportCsvResource:
 
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import-csv",
+            "/import?type=csv",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(csv_content), "data.csv"),
@@ -387,7 +387,7 @@ class TestImportCsvResource:
         csv_content = '_original_id,name\nold-1,"Alice\n'
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import-csv",
+            "/import?type=csv",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(csv_content.encode()), "data.csv"),
@@ -405,7 +405,7 @@ class TestImportCsvResource:
 
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import-csv",
+            "/import?type=csv",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(latin1_bytes), "data.csv"),

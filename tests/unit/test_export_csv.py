@@ -12,7 +12,7 @@ class TestExportCsvResource:
     def test_missing_url_parameter(self, client, auth_headers):
         """Test error when URL parameter is missing."""
         auth_headers["set_cookie"](client)
-        response = client.get("/export-csv")
+        response = client.get("/export?type=csv")
         assert response.status_code == 400
         data = json.loads(response.data)
         assert "url" in data["error"].lower()
@@ -31,7 +31,7 @@ class TestExportCsvResource:
         mock_get.return_value = mock_response
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export-csv?url=http://test.com/api/users&enrich=false")
+        response = client.get("/export?type=csv&url=http://test.com/api/users&enrich=false")
 
         assert response.status_code == 200
         assert "text/csv" in response.content_type
@@ -59,7 +59,7 @@ class TestExportCsvResource:
         mock_get.return_value = mock_response
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export-csv?url=http://test.com/api/users&enrich=true")
+        response = client.get("/export?type=csv&url=http://test.com/api/users&enrich=true")
 
         assert response.status_code == 200
         assert "text/csv" in response.content_type
@@ -73,7 +73,7 @@ class TestExportCsvResource:
         mock_get.return_value = mock_response
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export-csv?url=http://test.com/api/users")
+        response = client.get("/export?type=csv&url=http://test.com/api/users")
 
         assert response.status_code == 404
         data = json.loads(response.data)
@@ -88,7 +88,7 @@ class TestExportCsvResource:
         mock_get.return_value = mock_response
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export-csv?url=http://test.com/api/users")
+        response = client.get("/export?type=csv&url=http://test.com/api/users")
 
         assert response.status_code == 500
         data = json.loads(response.data)
@@ -114,7 +114,7 @@ class TestExportCsvResource:
         mock_get.return_value = mock_response
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export-csv?url=http://test.com/api/users&enrich=false")
+        response = client.get("/export?type=csv&url=http://test.com/api/users&enrich=false")
 
         assert response.status_code == 200
         csv_content = response.get_data(as_text=True)
@@ -139,7 +139,7 @@ class TestExportCsvResource:
         mock_get.return_value = mock_response
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export-csv?url=http://test.com/api/users&enrich=false")
+        response = client.get("/export?type=csv&url=http://test.com/api/users&enrich=false")
 
         assert response.status_code == 200
         csv_content = response.get_data(as_text=True)
@@ -163,7 +163,7 @@ class TestExportCsvResource:
         mock_get.return_value = mock_response
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export-csv?url=http://test.com/api/users&enrich=false")
+        response = client.get("/export?type=csv&url=http://test.com/api/users&enrich=false")
 
         assert response.status_code == 200
         csv_content = response.get_data(as_text=True)
@@ -181,7 +181,7 @@ class TestExportCsvResource:
         mock_get.side_effect = Timeout()
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export-csv?url=http://test.com/api/users")
+        response = client.get("/export?type=csv&url=http://test.com/api/users")
 
         assert response.status_code == 504
         data = json.loads(response.data)
@@ -195,7 +195,7 @@ class TestExportCsvResource:
         mock_get.side_effect = ConnectionError()
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export-csv?url=http://test.com/api/users")
+        response = client.get("/export?type=csv&url=http://test.com/api/users")
 
         assert response.status_code == 502
         data = json.loads(response.data)
@@ -211,7 +211,7 @@ class TestExportCsvResource:
         mock_get.side_effect = HTTPError(response=mock_response)
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export-csv?url=http://test.com/api/users")
+        response = client.get("/export?type=csv&url=http://test.com/api/users")
 
         assert response.status_code == 502
         data = json.loads(response.data)

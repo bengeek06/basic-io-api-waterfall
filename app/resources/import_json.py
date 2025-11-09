@@ -5,10 +5,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 from flask import request
-from flask_restful import Resource
 
 from app.logger import logger
-from app.utils.auth import require_jwt_auth
 from app.utils.reference_resolver import (
     detect_tree_structure,
     flatten_tree,
@@ -17,10 +15,9 @@ from app.utils.reference_resolver import (
 )
 
 
-class ImportJsonResource(Resource):
-    """Resource for importing data in JSON format."""
+# Functions for JSON import
 
-    def _parse_file(self, file) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
+def _parse_file(file) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
         """Parse and validate uploaded JSON file.
 
         Args:
@@ -52,8 +49,8 @@ class ImportJsonResource(Resource):
         except json.JSONDecodeError as exc:
             return None, f"Invalid JSON format: {exc}"
 
-    def _prepare_data(
-        self, data: List[Dict[str, Any]]
+def _prepare_data(
+        data: List[Dict[str, Any]]
     ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
         """Prepare data for import (flatten tree if needed, sort by dependencies).
 
@@ -81,8 +78,8 @@ class ImportJsonResource(Resource):
 
         return data, parent_field
 
-    def _resolve_single_reference(
-        self,
+def _resolve_single_reference(
+
         field_name: str,
         ref_metadata: Dict[str, Any],
         target_url: str,
@@ -146,8 +143,8 @@ class ImportJsonResource(Resource):
         )
         return ref_metadata.get("original_id")
 
-    def _resolve_references(
-        self,
+def _resolve_references(
+
         records: List[Dict[str, Any]],
         target_url: str,
         cookies: Dict[str, str],
@@ -183,7 +180,7 @@ class ImportJsonResource(Resource):
 
             # Resolve each reference
             for field_name, ref_metadata in references.items():
-                resolved_id = self._resolve_single_reference(
+                resolved_id = _resolve_single_reference(
                     field_name,
                     ref_metadata,
                     target_url,
@@ -196,8 +193,8 @@ class ImportJsonResource(Resource):
 
         return resolved_records, resolution_report
 
-    def _update_parent_reference(
-        self,
+def _update_parent_reference(
+
         record: Dict[str, Any],
         parent_field: str,
         id_mapping: Dict[str, str],
@@ -219,8 +216,8 @@ class ImportJsonResource(Resource):
         else:
             logger.warning(f"Parent {old_parent_id} not found in mapping for record")
 
-    def _import_single_record(
-        self,
+def _import_single_record(
+
         record: Dict[str, Any],
         target_url: str,
         cookies: Dict[str, str],
@@ -268,8 +265,8 @@ class ImportJsonResource(Resource):
             logger.error(f"Request failed for record {original_id}: {exc}")
             return False, original_id, None, error_detail
 
-    def _import_records(
-        self,
+def _import_records(
+
         records: List[Dict[str, Any]],
         target_url: str,
         cookies: Dict[str, str],
@@ -297,12 +294,12 @@ class ImportJsonResource(Resource):
         for record in records:
             # Update parent reference if tree structure
             if parent_field:
-                self._update_parent_reference(
+                _update_parent_reference(
                     record, parent_field, import_report["id_mapping"]
                 )
 
             # Import single record
-            success, original_id, new_id, error_detail = self._import_single_record(
+            success, original_id, new_id, error_detail = _import_single_record(
                 record, target_url, cookies
             )
 
@@ -317,8 +314,8 @@ class ImportJsonResource(Resource):
 
         return import_report
 
-    @require_jwt_auth()
-    def post(self):
+    #
+def import_json():
         """Import data from a JSON file to a Waterfall service endpoint.
 
         Form Data:
@@ -344,7 +341,7 @@ class ImportJsonResource(Resource):
 
         # Parse uploaded file
         logger.info(f"Parsing uploaded file for import to {target_url}")
-        data, error = self._parse_file(file)
+        data, error = _parse_file(file)
         if error:
             return {"message": error}, 400
 
@@ -352,7 +349,7 @@ class ImportJsonResource(Resource):
 
         # Prepare data (flatten tree, sort dependencies)
         try:
-            data, parent_field = self._prepare_data(data)
+            data, parent_field = _prepare_data(data)
             logger.info(f"Prepared {len(data)} records for import")
         except ValueError as exc:
             return {"message": f"Data preparation failed: {exc}"}, 400
@@ -362,7 +359,7 @@ class ImportJsonResource(Resource):
         if resolve_refs:
             cookies = {"access_token": request.cookies.get("access_token")}
             logger.info("Resolving foreign key references")
-            data, resolution_report = self._resolve_references(
+            data, resolution_report = _resolve_references(
                 data, target_url, cookies
             )
 
@@ -378,7 +375,7 @@ class ImportJsonResource(Resource):
         cookies = {"access_token": request.cookies.get("access_token")}
         logger.info(f"Importing {len(data)} records to {target_url}")
 
-        import_report = self._import_records(data, target_url, cookies, parent_field)
+        import_report = _import_records(data, target_url, cookies, parent_field)
 
         # Build response
         response = {

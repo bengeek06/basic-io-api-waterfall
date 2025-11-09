@@ -52,7 +52,7 @@ class TestCsvIntegrationWorkflow:
         # Step 1: EXPORT to CSV
         auth_headers["set_cookie"](client)
         export_response = client.get(
-            "/export-csv?url=http://source:5000/api/users&enrich=false"
+            "/export?type=csv&url=http://source:5000/api/users&enrich=false"
         )
 
         assert export_response.status_code == 200
@@ -82,7 +82,7 @@ class TestCsvIntegrationWorkflow:
         csv_bytes = export_response.get_data()
 
         import_response = client.post(
-            "/import-csv",
+            "/import?type=csv",
             data={
                 "url": "http://target:5000/api/users",
                 "file": (io.BytesIO(csv_bytes), "export.csv"),
@@ -125,7 +125,7 @@ class TestCsvIntegrationWorkflow:
         # Export to CSV
         auth_headers["set_cookie"](client)
         export_response = client.get(
-            "/export-csv?url=http://source:5000/api/org_units&enrich=false"
+            "/export?type=csv&url=http://source:5000/api/org_units&enrich=false"
         )
 
         assert export_response.status_code == 200
@@ -163,7 +163,7 @@ class TestCsvIntegrationWorkflow:
         # Import CSV
         csv_bytes = export_response.get_data()
         import_response = client.post(
-            "/import-csv",
+            "/import?type=csv",
             data={
                 "url": "http://target:5000/api/org_units",
                 "file": (io.BytesIO(csv_bytes), "tree.csv"),
@@ -205,7 +205,7 @@ class TestCsvIntegrationWorkflow:
         # Export to CSV
         auth_headers["set_cookie"](client)
         export_response = client.get(
-            "/export-csv?url=http://source:5000/api/users&enrich=false"
+            "/export?type=csv&url=http://source:5000/api/users&enrich=false"
         )
 
         assert export_response.status_code == 200
@@ -227,7 +227,7 @@ class TestCsvIntegrationWorkflow:
         # Import CSV
         csv_bytes = export_response.get_data()
         import_response = client.post(
-            "/import-csv",
+            "/import?type=csv",
             data={
                 "url": "http://target:5000/api/users",
                 "file": (io.BytesIO(csv_bytes), "complex.csv"),
