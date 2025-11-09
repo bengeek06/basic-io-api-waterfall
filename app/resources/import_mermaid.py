@@ -352,13 +352,16 @@ def _import_records(
         ):
             record["parent_id"] = report["id_mapping"][record["parent_id"]]
 
-        # Remove metadata fields
-        record.pop("id", None)  # Server will assign new ID
+        # Remove read-only fields before POST
+        readonly_fields = {"id", "created_at", "updated_at", "children"}
+        clean_record = {
+            k: v for k, v in record.items() if k not in readonly_fields
+        }
 
         try:
             response = requests.post(
                 target_url,
-                json=record,
+                json=clean_record,
                 cookies=cookies,
                 timeout=30,
             )

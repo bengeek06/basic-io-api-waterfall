@@ -158,11 +158,19 @@ def _import_records(  # pylint: disable=too-many-locals
             # Extract _original_id
             original_id = record.get("_original_id")
 
-            # Remove metadata fields before import
+            # Remove metadata and read-only fields before import
+            readonly_fields = {
+                "id",
+                "created_at",
+                "updated_at",
+                "children",
+            }
             clean_record = {
                 k: v
                 for k, v in record.items()
-                if not k.startswith("_") and v is not None
+                if not k.startswith("_")
+                and k not in readonly_fields
+                and v is not None
             }
 
             # Resolve parent reference if tree structure
