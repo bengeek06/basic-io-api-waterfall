@@ -114,30 +114,33 @@ echo -e "\n${BLUE}===========================================${NC}"
 echo -e "${BLUE}  Test 1: Customers (Simple - No FK)${NC}"
 echo -e "${BLUE}===========================================${NC}"
 
+# Generate unique timestamp for emails to avoid conflicts
+TIMESTAMP=$(date +%s)
+
 # 2.1: Create test customers via direct POST
 test_header "Create test customers directly in identity service"
 
 CUSTOMER_1=$(curl -s -X POST "$IDENTITY_URL/customers" \
     -b "$TEST_DIR/cookies.txt" \
     -H "Content-Type: application/json" \
-    -d '{
-        "name": "Test Customer Alpha",
-        "company_id": 1,
-        "email": "alpha@test.com",
-        "contact_person": "Alice Alpha",
-        "phone_number": "1234567890"
-    }')
+    -d "{
+        \"name\": \"Test Customer Alpha\",
+        \"company_id\": 1,
+        \"email\": \"alpha_${TIMESTAMP}@test.com\",
+        \"contact_person\": \"Alice Alpha\",
+        \"phone_number\": \"1234567890\"
+    }")
 
 CUSTOMER_2=$(curl -s -X POST "$IDENTITY_URL/customers" \
     -b "$TEST_DIR/cookies.txt" \
     -H "Content-Type: application/json" \
-    -d '{
-        "name": "Test Customer Beta",
-        "company_id": 1,
-        "email": "beta@test.com",
-        "contact_person": "Bob Beta",
-        "phone_number": "0987654321"
-    }')
+    -d "{
+        \"name\": \"Test Customer Beta\",
+        \"company_id\": 1,
+        \"email\": \"beta_${TIMESTAMP}@test.com\",
+        \"contact_person\": \"Bob Beta\",
+        \"phone_number\": \"0987654321\"
+    }")
 
 if echo "$CUSTOMER_1" | grep -q "\"id\""; then
     test_pass "Created customer 1"
@@ -252,12 +255,13 @@ echo "$CUSTOMERS" | grep -o '"id":"[^"]*"' | cut -d'"' -f4 | while read -r ID; d
     curl -s -X DELETE "$IDENTITY_URL/customers/$ID" -b "$TEST_DIR/cookies.txt" > /dev/null
 done
 
-IMPORT_CSV=$(curl -s -X POST "$BASIC_IO_URL/import?url=$IDENTITY_INTERNAL_URL/customers&type=csv" \
+IMPORT_CSV=$(curl -s -X POST "$BASIC_IO_URL/import?type=csv" \
     -b "$TEST_DIR/cookies.txt" \
-    -F "file=@$TEST_DIR/customers_export.csv")
+    -F "file=@$TEST_DIR/customers_export.csv" \
+    -F "url=$IDENTITY_INTERNAL_URL/customers")
 
-if echo "$IMPORT_CSV" | grep -q "imported"; then
-    test_pass "Imported customers from CSV"
+if echo "$IMPORT_CSV" | grep -q '"successful_imports"'; then
+    test_pass "Imported customers from CSV successfully"
 else
     test_fail "Failed to import customers from CSV"
     echo "Response: $IMPORT_CSV"
@@ -278,16 +282,14 @@ IMPORT_MERMAID=$(curl -s -X POST "$BASIC_IO_URL/import?url=$IDENTITY_INTERNAL_UR
 
 echo "$IMPORT_MERMAID" > "$TEST_DIR/customers_mermaid_import_result.json"
 
-if echo "$IMPORT_MERMAID" | grep -q "imported"; then
-    test_pass "Imported customers from Mermaid Flowchart"
-    info "Import result:"
-    echo "$IMPORT_MERMAID" | head -20
+if echo "$IMPORT_MERMAID" | grep -q '"successful_imports"'; then
+    test_pass "Imported customers from Mermaid Flowchart successfully"
 else
     test_fail "Failed to import customers from Mermaid Flowchart"
     echo "Response: $IMPORT_MERMAID"
 fi
 
-# 2.10: Verify imported data
+# 2.10: Verify import count
 test_header "Verify imported customers count"
 
 CUSTOMERS_AFTER=$(curl -s -X GET "$IDENTITY_URL/customers" -b "$TEST_DIR/cookies.txt")
