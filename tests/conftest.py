@@ -102,3 +102,21 @@ def mock_target_service():
     """Fixture to mock external service responses."""
     from unittest.mock import Mock
     return Mock()
+
+
+def pytest_addoption(parser):
+    """Add custom pytest command line options."""
+    parser.addoption(
+        "--run-e2e",
+        action="store_true",
+        default=False,
+        help="Run end-to-end tests that require external services",
+    )
+
+
+def pytest_configure(config):
+    """Configure pytest with custom markers."""
+    config.addinivalue_line(
+        "markers",
+        "e2e: mark test as end-to-end test requiring external services",
+    )
