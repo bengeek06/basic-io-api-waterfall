@@ -14,7 +14,9 @@ from app.utils.reference_resolver import (
 )
 
 
-def _parse_parameters() -> tuple[Optional[str], bool, bool, Optional[Dict[str, Any]]]:
+def _parse_parameters() -> (
+    tuple[Optional[str], bool, bool, Optional[Dict[str, Any]]]
+):
     """Parse and validate query parameters.
 
     Returns:
@@ -145,10 +147,14 @@ def export_json() -> Response:
         response = Response(
             json_str,
             mimetype="application/json",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            },
         )
 
-        logger.info(f"Successfully exported {len(data)} records from {target_url}")
+        logger.info(
+            f"Successfully exported {len(data)} records from {target_url}"
+        )
         return response
 
     except requests.exceptions.Timeout:
@@ -160,7 +166,9 @@ def export_json() -> Response:
         return {"message": f"Failed to connect to {target_url}"}, 502
 
     except requests.exceptions.HTTPError as exc:
-        logger.error(f"HTTP error from {target_url}: {exc.response.status_code}")
+        logger.error(
+            f"HTTP error from {target_url}: {exc.response.status_code}"
+        )
         return {
             "message": f"Target service returned error: {exc.response.status_code}"
         }, 502

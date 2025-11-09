@@ -44,7 +44,9 @@ class TestImportCsvResource:
         )
         assert response.status_code == 400
         data = json.loads(response.data)
-        assert "file" in data["error"].lower() or "empty" in data["error"].lower()
+        assert (
+            "file" in data["error"].lower() or "empty" in data["error"].lower()
+        )
 
     def test_invalid_file_extension(self, client, auth_headers):
         """Test error when file is not CSV."""
@@ -116,7 +118,11 @@ class TestImportCsvResource:
         )
         writer.writeheader()
         writer.writerow(
-            {"_original_id": "old-1", "name": "Alice", "email": "alice@test.com"}
+            {
+                "_original_id": "old-1",
+                "name": "Alice",
+                "email": "alice@test.com",
+            }
         )
         writer.writerow(
             {"_original_id": "old-2", "name": "Bob", "email": "bob@test.com"}
@@ -139,7 +145,9 @@ class TestImportCsvResource:
         assert data["import_report"]["failed"] == 0
 
     @patch("app.resources.import_csv.requests.post")
-    def test_import_with_nested_json_fields(self, mock_post, client, auth_headers):
+    def test_import_with_nested_json_fields(
+        self, mock_post, client, auth_headers
+    ):
         """Test CSV import with nested objects as JSON strings."""
         mock_response = Mock()
         mock_response.json.return_value = {"id": "new-1", "name": "Alice"}
@@ -195,7 +203,9 @@ class TestImportCsvResource:
             csv_buffer, fieldnames=["_original_id", "name", "email"]
         )
         writer.writeheader()
-        writer.writerow({"_original_id": "old-1", "name": "Alice", "email": ""})
+        writer.writerow(
+            {"_original_id": "old-1", "name": "Alice", "email": ""}
+        )
         csv_content = csv_buffer.getvalue().encode()
 
         auth_headers["set_cookie"](client)
@@ -237,9 +247,15 @@ class TestImportCsvResource:
             csv_buffer, fieldnames=["_original_id", "name", "parent_id"]
         )
         writer.writeheader()
-        writer.writerow({"_original_id": "parent-1", "name": "Root", "parent_id": ""})
         writer.writerow(
-            {"_original_id": "child-1", "name": "Child", "parent_id": "parent-1"}
+            {"_original_id": "parent-1", "name": "Root", "parent_id": ""}
+        )
+        writer.writerow(
+            {
+                "_original_id": "child-1",
+                "name": "Child",
+                "parent_id": "parent-1",
+            }
         )
         csv_content = csv_buffer.getvalue().encode()
 
@@ -285,7 +301,9 @@ class TestImportCsvResource:
             },
         )
 
-        assert response.status_code == 200  # Import endpoint returns 200 with errors
+        assert (
+            response.status_code == 200
+        )  # Import endpoint returns 200 with errors
         data = json.loads(response.data)
         assert data["import_report"]["failed"] == 1
         assert len(data["import_report"]["errors"]) > 0
@@ -325,7 +343,9 @@ class TestImportCsvResource:
         csv_content = csv_buffer.getvalue().encode()
 
         # Mock FK resolution
-        with patch("app.resources.import_csv.resolve_reference") as mock_resolve:
+        with patch(
+            "app.resources.import_csv.resolve_reference"
+        ) as mock_resolve:
             mock_resolve.return_value = ("resolved", "new-proj-uuid", [], None)
 
             auth_headers["set_cookie"](client)
@@ -359,7 +379,9 @@ class TestImportCsvResource:
         mock_post.side_effect = [mock_success, HTTPError(response=mock_error)]
 
         csv_buffer = io.StringIO()
-        writer = csv.DictWriter(csv_buffer, fieldnames=["_original_id", "name"])
+        writer = csv.DictWriter(
+            csv_buffer, fieldnames=["_original_id", "name"]
+        )
         writer.writeheader()
         writer.writerow({"_original_id": "old-1", "name": "Alice"})
         writer.writerow({"_original_id": "old-2", "name": "Bob"})
@@ -413,4 +435,7 @@ class TestImportCsvResource:
         )
         assert response.status_code == 400
         data = json.loads(response.data)
-        assert "utf-8" in data["error"].lower() or "encoding" in data["error"].lower()
+        assert (
+            "utf-8" in data["error"].lower()
+            or "encoding" in data["error"].lower()
+        )

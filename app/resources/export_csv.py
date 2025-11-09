@@ -171,7 +171,9 @@ def export_csv():
 
         # Generate CSV
         output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
+        writer = csv.DictWriter(
+            output, fieldnames=fieldnames, extrasaction="ignore"
+        )
         writer.writeheader()
         writer.writerows(prepared_data)
 
@@ -188,7 +190,9 @@ def export_csv():
         return Response(
             csv_content,
             mimetype="text/csv",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            },
         )
 
     except requests.exceptions.Timeout:
@@ -201,7 +205,9 @@ def export_csv():
 
     except requests.exceptions.HTTPError as exc:
         logger.error(f"HTTP error from target: {exc}")
-        return {"error": f"Target service error: {exc.response.status_code}"}, 502
+        return {
+            "error": f"Target service error: {exc.response.status_code}"
+        }, 502
 
     except Exception as exc:  # pylint: disable=broad-except
         logger.error(f"Unexpected error during export: {exc}")

@@ -40,7 +40,9 @@ class TestExportJsonResource:
         mock_get.return_value = mock_response
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export?type=json&url=http://localhost:5001/api/users")
+        response = client.get(
+            "/export?type=json&url=http://localhost:5001/api/users"
+        )
 
         assert response.status_code == 200
         assert response.content_type == "application/json"
@@ -127,7 +129,9 @@ class TestExportJsonResource:
         mock_get.return_value = mock_response
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export?type=json&url=http://localhost:5001/api/users")
+        response = client.get(
+            "/export?type=json&url=http://localhost:5001/api/users"
+        )
 
         assert response.status_code == 400
         data = json.loads(response.data)
@@ -141,7 +145,9 @@ class TestExportJsonResource:
         mock_get.side_effect = Timeout("Connection timeout")
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export?type=json&url=http://localhost:5001/api/users")
+        response = client.get(
+            "/export?type=json&url=http://localhost:5001/api/users"
+        )
 
         assert response.status_code == 504
         data = json.loads(response.data)
@@ -155,7 +161,9 @@ class TestExportJsonResource:
         mock_get.side_effect = ConnectionError("Cannot connect")
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export?type=json&url=http://localhost:5001/api/users")
+        response = client.get(
+            "/export?type=json&url=http://localhost:5001/api/users"
+        )
 
         assert response.status_code == 502
         data = json.loads(response.data)
@@ -171,7 +179,9 @@ class TestExportJsonResource:
         mock_get.side_effect = HTTPError(response=mock_response)
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export?type=json&url=http://localhost:5001/api/users")
+        response = client.get(
+            "/export?type=json&url=http://localhost:5001/api/users"
+        )
 
         assert response.status_code == 502
         data = json.loads(response.data)
@@ -186,7 +196,9 @@ class TestExportJsonResource:
         mock_get.return_value = mock_response
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export?type=json&url=http://localhost:5001/api/users")
+        response = client.get(
+            "/export?type=json&url=http://localhost:5001/api/users"
+        )
 
         assert response.status_code == 502
         data = json.loads(response.data)
@@ -198,7 +210,9 @@ class TestExportJsonResource:
         mock_get.side_effect = RuntimeError("Unexpected error")
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export?type=json&url=http://localhost:5001/api/users")
+        response = client.get(
+            "/export?type=json&url=http://localhost:5001/api/users"
+        )
 
         assert response.status_code == 500
         data = json.loads(response.data)
@@ -222,5 +236,7 @@ class TestExportJsonResource:
 
     def test_unauthorized_without_jwt(self, client):
         """Test that request without JWT returns 401."""
-        response = client.get("/export?type=json&url=http://localhost:5001/api/users")
+        response = client.get(
+            "/export?type=json&url=http://localhost:5001/api/users"
+        )
         assert response.status_code == 401

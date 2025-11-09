@@ -216,7 +216,9 @@ def _update_parent_reference(
     if new_parent_id:
         record[parent_field] = new_parent_id
     else:
-        logger.warning(f"Parent {old_parent_id} not found in mapping for record")
+        logger.warning(
+            f"Parent {old_parent_id} not found in mapping for record"
+        )
 
 
 def _import_single_record(
@@ -296,7 +298,9 @@ def _import_records(
     for record in records:
         # Update parent reference if tree structure
         if parent_field:
-            _update_parent_reference(record, parent_field, import_report["id_mapping"])
+            _update_parent_reference(
+                record, parent_field, import_report["id_mapping"]
+            )
 
         # Import single record
         success, original_id, new_id, error_detail = _import_single_record(
@@ -360,10 +364,15 @@ def import_json():
     if resolve_refs:
         cookies = {"access_token": request.cookies.get("access_token")}
         logger.info("Resolving foreign key references")
-        data, resolution_report = _resolve_references(data, target_url, cookies)
+        data, resolution_report = _resolve_references(
+            data, target_url, cookies
+        )
 
         # Check for resolution issues
-        if resolution_report["ambiguous"] > 0 or resolution_report["missing"] > 0:
+        if (
+            resolution_report["ambiguous"] > 0
+            or resolution_report["missing"] > 0
+        ):
             logger.warning(
                 f"Reference resolution issues: "
                 f"{resolution_report['ambiguous']} ambiguous, "

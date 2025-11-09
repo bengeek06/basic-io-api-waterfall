@@ -22,7 +22,9 @@ from app.utils.reference_resolver import (
 # Functions for CSV import
 
 
-def _parse_csv_file(file) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
+def _parse_csv_file(
+    file,
+) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
     """Parse and validate uploaded CSV file.
 
     Args:
@@ -144,7 +146,12 @@ def _import_records(  # pylint: disable=too-many-locals
     """
     id_mapping = {}
     import_report = {"success": 0, "failed": 0, "errors": []}
-    resolution_report = {"resolved": 0, "ambiguous": 0, "missing": 0, "details": []}
+    resolution_report = {
+        "resolved": 0,
+        "ambiguous": 0,
+        "missing": 0,
+        "details": [],
+    }
 
     for record in data:
         try:
@@ -256,12 +263,20 @@ def _resolve_references(
         elif status == "ambiguous":
             resolution_report["ambiguous"] += 1
             resolution_report["details"].append(
-                {"field": field_name, "value": field_value, "status": "ambiguous"}
+                {
+                    "field": field_name,
+                    "value": field_value,
+                    "status": "ambiguous",
+                }
             )
         else:
             resolution_report["missing"] += 1
             resolution_report["details"].append(
-                {"field": field_name, "value": field_value, "status": "missing"}
+                {
+                    "field": field_name,
+                    "value": field_value,
+                    "status": "missing",
+                }
             )
 
 
@@ -290,7 +305,9 @@ def import_csv():
         # Parse parameters
         file = request.files.get("file")
         target_url = request.form.get("url")
-        resolve_fks = request.form.get("resolve_foreign_keys", "true").lower() == "true"
+        resolve_fks = (
+            request.form.get("resolve_foreign_keys", "true").lower() == "true"
+        )
 
         if not target_url:
             return {"error": "Missing 'url' parameter"}, 400

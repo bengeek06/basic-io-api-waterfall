@@ -187,7 +187,9 @@ class TestJsonIntegrationWorkflow:
         # Mock import POST with parent_id remapping
         id_mapping = {}
 
-        def mock_create_with_mapping(url, json=None, cookies=None, timeout=None):
+        def mock_create_with_mapping(
+            url, json=None, cookies=None, timeout=None
+        ):
             # Map old parent_id to new parent_id
             if json.get("parent_id") and json["parent_id"] in id_mapping:
                 json["parent_id"] = id_mapping[json["parent_id"]]

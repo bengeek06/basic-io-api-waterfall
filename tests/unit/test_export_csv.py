@@ -31,7 +31,9 @@ class TestExportCsvResource:
         mock_get.return_value = mock_response
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export?type=csv&url=http://test.com/api/users&enrich=false")
+        response = client.get(
+            "/export?type=csv&url=http://test.com/api/users&enrich=false"
+        )
 
         assert response.status_code == 200
         assert "text/csv" in response.content_type
@@ -59,7 +61,9 @@ class TestExportCsvResource:
         mock_get.return_value = mock_response
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export?type=csv&url=http://test.com/api/users&enrich=true")
+        response = client.get(
+            "/export?type=csv&url=http://test.com/api/users&enrich=true"
+        )
 
         assert response.status_code == 200
         assert "text/csv" in response.content_type
@@ -114,7 +118,9 @@ class TestExportCsvResource:
         mock_get.return_value = mock_response
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export?type=csv&url=http://test.com/api/users&enrich=false")
+        response = client.get(
+            "/export?type=csv&url=http://test.com/api/users&enrich=false"
+        )
 
         assert response.status_code == 200
         csv_content = response.get_data(as_text=True)
@@ -139,7 +145,9 @@ class TestExportCsvResource:
         mock_get.return_value = mock_response
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export?type=csv&url=http://test.com/api/users&enrich=false")
+        response = client.get(
+            "/export?type=csv&url=http://test.com/api/users&enrich=false"
+        )
 
         assert response.status_code == 200
         csv_content = response.get_data(as_text=True)
@@ -163,7 +171,9 @@ class TestExportCsvResource:
         mock_get.return_value = mock_response
 
         auth_headers["set_cookie"](client)
-        response = client.get("/export?type=csv&url=http://test.com/api/users&enrich=false")
+        response = client.get(
+            "/export?type=csv&url=http://test.com/api/users&enrich=false"
+        )
 
         assert response.status_code == 200
         csv_content = response.get_data(as_text=True)

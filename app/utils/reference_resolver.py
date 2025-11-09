@@ -235,7 +235,8 @@ def resolve_reference(
                 "missing",
                 None,
                 [],
-                f"No {resource_type} found with {lookup_field}=" f"'{lookup_value}'",
+                f"No {resource_type} found with {lookup_field}="
+                f"'{lookup_value}'",
             )
 
         if len(matches) == 1:
@@ -247,7 +248,8 @@ def resolve_reference(
             "ambiguous",
             None,
             matches,
-            f"Multiple {resource_type} found with {lookup_field}=" f"'{lookup_value}'",
+            f"Multiple {resource_type} found with {lookup_field}="
+            f"'{lookup_value}'",
         )
 
     except requests.RequestException as exc:

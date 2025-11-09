@@ -5,7 +5,10 @@ import json
 from unittest.mock import Mock, patch
 
 import requests
-from requests.exceptions import HTTPError, ConnectionError as RequestsConnectionError
+from requests.exceptions import (
+    HTTPError,
+    ConnectionError as RequestsConnectionError,
+)
 
 
 class TestImportJsonResource:

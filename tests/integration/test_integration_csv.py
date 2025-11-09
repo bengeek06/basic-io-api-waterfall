@@ -34,7 +34,12 @@ class TestCsvIntegrationWorkflow:
     @patch("app.resources.export_csv.requests.get")
     @patch("app.resources.import_csv.requests.post")
     def test_simple_csv_roundtrip(
-        self, mock_import_post, mock_export_get, client, auth_headers, mock_csv_service
+        self,
+        mock_import_post,
+        mock_export_get,
+        client,
+        auth_headers,
+        mock_csv_service,
     ):
         """Test complete CSV workflow: export → import."""
         # Source data
@@ -106,7 +111,12 @@ class TestCsvIntegrationWorkflow:
     @patch("app.resources.export_csv.requests.get")
     @patch("app.resources.import_csv.requests.post")
     def test_csv_tree_structure_roundtrip(
-        self, mock_import_post, mock_export_get, client, auth_headers, mock_csv_service
+        self,
+        mock_import_post,
+        mock_export_get,
+        client,
+        auth_headers,
+        mock_csv_service,
     ):
         """Test CSV export→import with tree structure."""
         # Source tree data
@@ -133,7 +143,9 @@ class TestCsvIntegrationWorkflow:
         # Mock import with ID mapping
         id_mapping = {}
 
-        def mock_create_with_mapping(url, json=None, cookies=None, timeout=None):
+        def mock_create_with_mapping(
+            url, json=None, cookies=None, timeout=None
+        ):
             # Handle parent_id mapping
             if json.get("parent_id") and json["parent_id"] in id_mapping:
                 json["parent_id"] = id_mapping[json["parent_id"]]
@@ -183,7 +195,12 @@ class TestCsvIntegrationWorkflow:
     @patch("app.resources.export_csv.requests.get")
     @patch("app.resources.import_csv.requests.post")
     def test_csv_with_complex_types(
-        self, mock_import_post, mock_export_get, client, auth_headers, mock_csv_service
+        self,
+        mock_import_post,
+        mock_export_get,
+        client,
+        auth_headers,
+        mock_csv_service,
     ):
         """Test CSV roundtrip with nested objects (JSON-encoded in CSV)."""
         # Source data with nested object
