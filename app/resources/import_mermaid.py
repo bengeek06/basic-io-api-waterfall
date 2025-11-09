@@ -131,13 +131,18 @@ def _parse_flowchart(lines: List[str]) -> List[Dict[str, Any]]:
     Returns:
         List of records extracted from the diagram
     """
+    # Parse metadata to check if this is a tree structure
+    metadata = _parse_metadata(lines)
+    is_tree = metadata.get("is_tree", "false").lower() == "true"
+
     records, relationships = _parse_flowchart_lines(lines)
 
-    # Apply relationships to establish parent_id
-    for parent_node_id, child_node_id in relationships:
-        if child_node_id in records and parent_node_id in records:
-            parent_original_id = records[parent_node_id].get("id")
-            records[child_node_id]["parent_id"] = parent_original_id
+    # Apply relationships to establish parent_id ONLY if tree structure
+    if is_tree:
+        for parent_node_id, child_node_id in relationships:
+            if child_node_id in records and parent_node_id in records:
+                parent_original_id = records[parent_node_id].get("id")
+                records[child_node_id]["parent_id"] = parent_original_id
 
     return list(records.values())
 
@@ -151,6 +156,10 @@ def _parse_graph(lines: List[str]) -> List[Dict[str, Any]]:
     Returns:
         List of records extracted from the diagram
     """
+    # Parse metadata to check if this is a tree structure
+    metadata = _parse_metadata(lines)
+    is_tree = metadata.get("is_tree", "false").lower() == "true"
+
     records = {}
     relationships = []
 
@@ -180,11 +189,12 @@ def _parse_graph(lines: List[str]) -> List[Dict[str, Any]]:
             record = {"id": original_id, "name": label}
             records[node_id] = record
 
-        # Apply relationships
-    for parent_node_id, child_node_id in relationships:
-        if child_node_id in records and parent_node_id in records:
-            parent_original_id = records[parent_node_id].get("id")
-            records[child_node_id]["parent_id"] = parent_original_id
+    # Apply relationships to establish parent_id ONLY if tree structure
+    if is_tree:
+        for parent_node_id, child_node_id in relationships:
+            if child_node_id in records and parent_node_id in records:
+                parent_original_id = records[parent_node_id].get("id")
+                records[child_node_id]["parent_id"] = parent_original_id
 
     return list(records.values())
 
@@ -353,6 +363,7 @@ def _import_records(
             record["parent_id"] = report["id_mapping"][record["parent_id"]]
 
         # Remove read-only fields before POST
+        # Note: parent_id is intentionally kept if present for tree structures
         readonly_fields = {"id", "created_at", "updated_at", "children"}
         clean_record = {
             k: v for k, v in record.items() if k not in readonly_fields
