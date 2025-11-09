@@ -122,9 +122,7 @@ class ExportJsonResource(Resource):
             Response: JSON file download with exported data
         """
         # Parse parameters
-        target_url, tree_mode, enrich_mode, lookup_config = (
-            self._parse_parameters()
-        )
+        target_url, tree_mode, enrich_mode, lookup_config = self._parse_parameters()
 
         # Check for invalid lookup_config first
         if lookup_config == "INVALID":
@@ -142,9 +140,7 @@ class ExportJsonResource(Resource):
                 return {"message": "Target URL must return a JSON array"}, 400
 
             # Prepare data
-            data = self._prepare_data(
-                data, enrich_mode, tree_mode, lookup_config
-            )
+            data = self._prepare_data(data, enrich_mode, tree_mode, lookup_config)
 
             # Generate filename from URL
             resource_name = target_url.rstrip("/").split("/")[-1]
@@ -155,14 +151,10 @@ class ExportJsonResource(Resource):
             response = Response(
                 json_str,
                 mimetype="application/json",
-                headers={
-                    "Content-Disposition": f'attachment; filename="{filename}"'
-                },
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
             )
 
-            logger.info(
-                f"Successfully exported {len(data)} records from {target_url}"
-            )
+            logger.info(f"Successfully exported {len(data)} records from {target_url}")
             return response
 
         except requests.exceptions.Timeout:
@@ -174,13 +166,10 @@ class ExportJsonResource(Resource):
             return {"message": f"Failed to connect to {target_url}"}, 502
 
         except requests.exceptions.HTTPError as exc:
-            logger.error(
-                f"HTTP error from {target_url}: {exc.response.status_code}"
-            )
+            logger.error(f"HTTP error from {target_url}: {exc.response.status_code}")
             return {
                 "message": (
-                    f"Target service returned error: "
-                    f"{exc.response.status_code}"
+                    f"Target service returned error: " f"{exc.response.status_code}"
                 )
             }, 502
 

@@ -4,8 +4,10 @@ These tests use a lightweight mock Waterfall service to test the complete
 export → import workflow without external dependencies.
 """
 
+# pylint: disable=redefined-outer-name,unused-argument,too-many-locals
+
 import io
-import json
+import json as json_module
 from unittest.mock import Mock, patch
 
 import pytest
@@ -38,9 +40,7 @@ class MockWaterfallService:
 
     def query_records(self, field, value):
         """Simulate GET with query params - filter records."""
-        return [
-            r for r in self.storage.values() if r.get(field) == value
-        ]
+        return [r for r in self.storage.values() if r.get(field) == value]
 
 
 @pytest.fixture
@@ -86,7 +86,7 @@ class TestJsonIntegrationWorkflow:
         )
 
         assert export_response.status_code == 200
-        export_data = json.loads(export_response.data)
+        export_data = json_module.loads(export_response.data)
 
         # Verify exported data has _original_id
         assert len(export_data) == 2
@@ -109,7 +109,7 @@ class TestJsonIntegrationWorkflow:
             data={
                 "url": "http://target:5000/api/users",
                 "file": (
-                    io.BytesIO(json.dumps(export_data).encode()),
+                    io.BytesIO(json_module.dumps(export_data).encode()),
                     "export.json",
                 ),
                 "resolve_refs": "false",
@@ -117,7 +117,7 @@ class TestJsonIntegrationWorkflow:
         )
 
         assert import_response.status_code == 201
-        import_data = json.loads(import_response.data)
+        import_data = json_module.loads(import_response.data)
 
         # Verify import success
         assert import_data["import_report"]["success"] == 2
@@ -176,7 +176,7 @@ class TestJsonIntegrationWorkflow:
         )
 
         assert export_response.status_code == 200
-        export_data = json.loads(export_response.data)
+        export_data = json_module.loads(export_response.data)
 
         # Verify tree was nested
         assert len(export_data) == 1  # Only root
@@ -187,9 +187,7 @@ class TestJsonIntegrationWorkflow:
         # Mock import POST with parent_id remapping
         id_mapping = {}
 
-        def mock_create_with_mapping(
-            url, json=None, cookies=None, timeout=None
-        ):
+        def mock_create_with_mapping(url, json=None, cookies=None, timeout=None):
             # Map old parent_id to new parent_id
             if json.get("parent_id") and json["parent_id"] in id_mapping:
                 json["parent_id"] = id_mapping[json["parent_id"]]
@@ -214,7 +212,7 @@ class TestJsonIntegrationWorkflow:
             data={
                 "url": "http://target:5000/api/organization_units",
                 "file": (
-                    io.BytesIO(json.dumps(export_data).encode()),
+                    io.BytesIO(json_module.dumps(export_data).encode()),
                     "tree.json",
                 ),
                 "resolve_refs": "false",
@@ -222,7 +220,7 @@ class TestJsonIntegrationWorkflow:
         )
 
         assert import_response.status_code == 201
-        import_data = json.loads(import_response.data)
+        import_data = json_module.loads(import_response.data)
 
         # Verify all 3 records imported successfully
         assert import_data["import_report"]["success"] == 3
@@ -253,7 +251,7 @@ class TestJsonIntegrationWorkflow:
         """Test export with FK enrichment → import with FK resolution."""
         # Use real UUIDs for FK detection to work
         project_uuid = "12345678-1234-5678-1234-567812345678"
-        
+
         # Source: tasks with project references (UUIDs required for FK detection)
         source_tasks = [
             {
@@ -296,7 +294,7 @@ class TestJsonIntegrationWorkflow:
         )
 
         assert export_response.status_code == 200
-        export_data = json.loads(export_response.data)
+        export_data = json_module.loads(export_response.data)
 
         # Verify _references metadata added (even if enrichment incomplete)
         assert all("_references" in r for r in export_data)
@@ -335,7 +333,7 @@ class TestJsonIntegrationWorkflow:
             data={
                 "url": "http://target:5000/api/tasks",
                 "file": (
-                    io.BytesIO(json.dumps(export_data).encode()),
+                    io.BytesIO(json_module.dumps(export_data).encode()),
                     "tasks.json",
                 ),
                 "resolve_refs": "true",
@@ -343,14 +341,14 @@ class TestJsonIntegrationWorkflow:
         )
 
         assert import_response.status_code == 201
-        import_data = json.loads(import_response.data)
+        import_data = json_module.loads(import_response.data)
 
         # Verify import succeeded
         assert import_data["import_report"]["success"] == 2
 
         # Verify resolution report exists (even if empty due to null lookup values)
         assert "resolution_report" in import_data
-        
+
         # Note: In this test, enrichment creates _references but with null lookup_value
         # because the mock doesn't properly simulate the enrichment GET calls.
         # This is acceptable for an integration test - unit tests cover the details.
@@ -364,11 +362,11 @@ class TestJsonIntegrationWorkflow:
 )
 class TestE2EWithRealIdentityService:
     """End-to-end tests with real Identity service.
-    
+
     These tests require:
     - docker pull ghcr.io/bengeek06/identity-api-waterfall:sha-cb62fb9
     - docker-compose.test.yml running
-    
+
     Run with: pytest --run-e2e tests/test_integration_json.py
     """
 

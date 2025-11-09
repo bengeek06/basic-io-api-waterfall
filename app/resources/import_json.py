@@ -20,9 +20,7 @@ from app.utils.reference_resolver import (
 class ImportJsonResource(Resource):
     """Resource for importing data in JSON format."""
 
-    def _parse_file(
-        self, file
-    ) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
+    def _parse_file(self, file) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
         """Parse and validate uploaded JSON file.
 
         Args:
@@ -69,9 +67,7 @@ class ImportJsonResource(Resource):
         is_tree = any("children" in record for record in data)
 
         # Detect parent field
-        parent_field = (
-            detect_tree_structure(data) if not is_tree else "parent_id"
-        )
+        parent_field = detect_tree_structure(data) if not is_tree else "parent_id"
 
         # Flatten tree structure if needed
         if is_tree:
@@ -112,9 +108,7 @@ class ImportJsonResource(Resource):
         if status == "resolved":
             resolution_report["resolved"] += 1
             lookup_val = ref_metadata.get("lookup_value")
-            logger.debug(
-                f"Resolved {field_name}: {lookup_val} -> {resolved_id}"
-            )
+            logger.debug(f"Resolved {field_name}: {lookup_val} -> {resolved_id}")
             return resolved_id
 
         if status == "ambiguous":
@@ -223,9 +217,7 @@ class ImportJsonResource(Resource):
         if new_parent_id:
             record[parent_field] = new_parent_id
         else:
-            logger.warning(
-                f"Parent {old_parent_id} not found in mapping for record"
-            )
+            logger.warning(f"Parent {old_parent_id} not found in mapping for record")
 
     def _import_single_record(
         self,
@@ -265,9 +257,7 @@ class ImportJsonResource(Resource):
                 "status_code": exc.response.status_code,
                 "error": exc.response.text if exc.response else str(exc),
             }
-            logger.error(
-                f"Failed to import record {original_id}: {error_detail}"
-            )
+            logger.error(f"Failed to import record {original_id}: {error_detail}")
             return False, original_id, None, error_detail
 
         except requests.exceptions.RequestException as exc:
@@ -312,8 +302,8 @@ class ImportJsonResource(Resource):
                 )
 
             # Import single record
-            success, original_id, new_id, error_detail = (
-                self._import_single_record(record, target_url, cookies)
+            success, original_id, new_id, error_detail = self._import_single_record(
+                record, target_url, cookies
             )
 
             if success:
@@ -350,9 +340,7 @@ class ImportJsonResource(Resource):
         if not target_url:
             return {"message": "Missing required parameter: url"}, 400
 
-        resolve_refs = (
-            request.values.get("resolve_refs", "true").lower() == "true"
-        )
+        resolve_refs = request.values.get("resolve_refs", "true").lower() == "true"
 
         # Parse uploaded file
         logger.info(f"Parsing uploaded file for import to {target_url}")
@@ -379,10 +367,7 @@ class ImportJsonResource(Resource):
             )
 
             # Check for resolution issues
-            if (
-                resolution_report["ambiguous"] > 0
-                or resolution_report["missing"] > 0
-            ):
+            if resolution_report["ambiguous"] > 0 or resolution_report["missing"] > 0:
                 logger.warning(
                     f"Reference resolution issues: "
                     f"{resolution_report['ambiguous']} ambiguous, "
@@ -393,9 +378,7 @@ class ImportJsonResource(Resource):
         cookies = {"access_token": request.cookies.get("access_token")}
         logger.info(f"Importing {len(data)} records to {target_url}")
 
-        import_report = self._import_records(
-            data, target_url, cookies, parent_field
-        )
+        import_report = self._import_records(data, target_url, cookies, parent_field)
 
         # Build response
         response = {

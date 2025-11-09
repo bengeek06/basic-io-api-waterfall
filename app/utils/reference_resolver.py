@@ -180,9 +180,7 @@ def enrich_record(
         return record
 
     # Build basic reference metadata
-    references = build_references_metadata(
-        record, fk_fields, lookup_config
-    )
+    references = build_references_metadata(record, fk_fields, lookup_config)
 
     # For now, we don't fetch actual values (would require API calls)
     # This will be implemented when we have real service URLs
@@ -237,8 +235,7 @@ def resolve_reference(
                 "missing",
                 None,
                 [],
-                f"No {resource_type} found with {lookup_field}="
-                f"'{lookup_value}'",
+                f"No {resource_type} found with {lookup_field}=" f"'{lookup_value}'",
             )
 
         if len(matches) == 1:
@@ -250,8 +247,7 @@ def resolve_reference(
             "ambiguous",
             None,
             matches,
-            f"Multiple {resource_type} found with {lookup_field}="
-            f"'{lookup_value}'",
+            f"Multiple {resource_type} found with {lookup_field}=" f"'{lookup_value}'",
         )
 
     except requests.RequestException as exc:
