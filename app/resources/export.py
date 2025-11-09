@@ -41,9 +41,9 @@ class ExportResource(Resource):
             logger.info("Dispatching to JSON export handler")
             return export_json()
 
-        elif export_type == "csv":
+        if export_type == "csv":
             logger.info("Dispatching to CSV export handler")
             return export_csv()
 
-        elif export_type == "mermaid":
-            return {"message": "Mermaid export not yet implemented"}, 501
+        # export_type == "mermaid"
+        return {"message": "Mermaid export not yet implemented"}, 501

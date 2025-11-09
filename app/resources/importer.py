@@ -43,9 +43,9 @@ class ImportResource(Resource):
             logger.info("Dispatching to JSON import handler")
             return import_json()
 
-        elif import_type == "csv":
+        if import_type == "csv":
             logger.info("Dispatching to CSV import handler")
             return import_csv()
 
-        elif import_type == "mermaid":
-            return {"message": "Mermaid import not yet implemented"}, 501
+        # import_type == "mermaid"
+        return {"message": "Mermaid import not yet implemented"}, 501

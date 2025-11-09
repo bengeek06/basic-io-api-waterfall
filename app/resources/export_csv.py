@@ -1,5 +1,7 @@
 """CSV export resource for data export operations."""
 
+# pylint: disable=duplicate-code
+
 import csv
 import io
 import json

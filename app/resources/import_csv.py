@@ -1,5 +1,7 @@
 """CSV import resource for data import operations."""
 
+# pylint: disable=duplicate-code
+
 import csv
 import io
 import json
@@ -121,7 +123,7 @@ def _prepare_data(
     return data, parent_field
 
 
-def _import_records(
+def _import_records(  # pylint: disable=too-many-locals
     data: List[Dict[str, Any]],
     target_url: str,
     cookies: Dict[str, str],
