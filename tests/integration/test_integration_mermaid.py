@@ -227,9 +227,7 @@ class TestMermaidIntegrationWorkflow:
         rest_idx = call_order.index("REST")
         database_idx = call_order.index("Database")
 
-        assert (
-            backend_idx < api_idx
-        ), "Backend should be created before API"
+        assert backend_idx < api_idx, "Backend should be created before API"
         assert api_idx < rest_idx, "API should be created before REST"
         assert (
             backend_idx < database_idx
