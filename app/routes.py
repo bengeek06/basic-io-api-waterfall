@@ -11,8 +11,8 @@ from app.logger import logger
 from app.resources.version import VersionResource
 from app.resources.config import ConfigResource
 from app.resources.health import HealthResource
-from app.resources.export_json import ExportJsonResource
-from app.resources.import_json import ImportJsonResource
+from app.resources.export import ExportResource
+from app.resources.importer import ImportResource
 
 
 def register_routes(app):
@@ -31,8 +31,8 @@ def register_routes(app):
     api.add_resource(ConfigResource, "/config")
     api.add_resource(HealthResource, "/health")
 
-    # Import/Export endpoints
-    api.add_resource(ExportJsonResource, "/export")
-    api.add_resource(ImportJsonResource, "/import")
+    # Unified Import/Export endpoints
+    api.add_resource(ExportResource, "/export")
+    api.add_resource(ImportResource, "/import")
 
     logger.info("Routes registered successfully.")

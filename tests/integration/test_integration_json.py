@@ -82,7 +82,7 @@ class TestJsonIntegrationWorkflow:
         # Step 1: EXPORT from source
         auth_headers["set_cookie"](client)
         export_response = client.get(
-            "/export?url=http://source:5000/api/users&enrich=false"
+            "/export?type=json&url=http://source:5000/api/users&enrich=false"
         )
 
         assert export_response.status_code == 200
@@ -105,7 +105,7 @@ class TestJsonIntegrationWorkflow:
 
         # Import the exported data
         import_response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://target:5000/api/users",
                 "file": (
@@ -171,7 +171,7 @@ class TestJsonIntegrationWorkflow:
         # Export with tree structure
         auth_headers["set_cookie"](client)
         export_response = client.get(
-            "/export?url=http://source:5000/api/organization_units"
+            "/export?type=json&url=http://source:5000/api/organization_units"
             "&enrich=false&tree=true"
         )
 
@@ -187,7 +187,9 @@ class TestJsonIntegrationWorkflow:
         # Mock import POST with parent_id remapping
         id_mapping = {}
 
-        def mock_create_with_mapping(url, json=None, cookies=None, timeout=None):
+        def mock_create_with_mapping(
+            url, json=None, cookies=None, timeout=None
+        ):
             # Map old parent_id to new parent_id
             if json.get("parent_id") and json["parent_id"] in id_mapping:
                 json["parent_id"] = id_mapping[json["parent_id"]]
@@ -208,7 +210,7 @@ class TestJsonIntegrationWorkflow:
 
         # Import the tree
         import_response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://target:5000/api/organization_units",
                 "file": (
@@ -290,7 +292,7 @@ class TestJsonIntegrationWorkflow:
         # Export with enrichment (using default lookup on id field)
         auth_headers["set_cookie"](client)
         export_response = client.get(
-            "/export?url=http://source:5000/api/tasks&enrich=true"
+            "/export?type=json&url=http://source:5000/api/tasks&enrich=true"
         )
 
         assert export_response.status_code == 200
@@ -329,7 +331,7 @@ class TestJsonIntegrationWorkflow:
 
         # Import with resolution
         import_response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://target:5000/api/tasks",
                 "file": (

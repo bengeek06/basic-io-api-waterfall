@@ -5,7 +5,10 @@ import json
 from unittest.mock import Mock, patch
 
 import requests
-from requests.exceptions import HTTPError, ConnectionError as RequestsConnectionError
+from requests.exceptions import (
+    HTTPError,
+    ConnectionError as RequestsConnectionError,
+)
 
 
 class TestImportJsonResource:
@@ -15,7 +18,7 @@ class TestImportJsonResource:
         """Test error when no file is provided."""
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={"url": "http://localhost:5001/api/users"},
         )
         assert response.status_code == 400
@@ -26,7 +29,7 @@ class TestImportJsonResource:
         """Test that request without JWT returns 401."""
         file_content = json.dumps([]).encode("utf-8")
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(file_content), "data.json"),
@@ -63,7 +66,7 @@ class TestImportJsonResource:
 
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(file_content), "data.json"),
@@ -81,7 +84,7 @@ class TestImportJsonResource:
         """Test error when filename is empty."""
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(b"[]"), ""),
@@ -96,7 +99,7 @@ class TestImportJsonResource:
         """Test error when file is not JSON."""
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(b"data"), "file.txt"),
@@ -110,7 +113,7 @@ class TestImportJsonResource:
         """Test error when file contains invalid JSON."""
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(b"not json"), "data.json"),
@@ -125,7 +128,7 @@ class TestImportJsonResource:
         auth_headers["set_cookie"](client)
         file_content = json.dumps({"key": "value"}).encode("utf-8")
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(file_content), "data.json"),
@@ -140,7 +143,7 @@ class TestImportJsonResource:
         auth_headers["set_cookie"](client)
         file_content = json.dumps([]).encode("utf-8")
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={"file": (io.BytesIO(file_content), "data.json")},
         )
         assert response.status_code == 400
@@ -180,7 +183,7 @@ class TestImportJsonResource:
 
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://localhost:5001/api/categories",
                 "file": (io.BytesIO(file_content), "tree.json"),
@@ -233,7 +236,7 @@ class TestImportJsonResource:
 
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://localhost:5001/api/categories",
                 "file": (io.BytesIO(file_content), "nested.json"),
@@ -287,7 +290,7 @@ class TestImportJsonResource:
 
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://localhost:5001/api/tasks",
                 "file": (io.BytesIO(file_content), "tasks.json"),
@@ -332,7 +335,7 @@ class TestImportJsonResource:
 
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(file_content), "data.json"),
@@ -356,7 +359,7 @@ class TestImportJsonResource:
 
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(file_content), "data.json"),
@@ -379,7 +382,7 @@ class TestImportJsonResource:
 
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://localhost:5001/api/categories",
                 "file": (io.BytesIO(file_content), "circular.json"),
@@ -404,7 +407,7 @@ class TestImportJsonResource:
 
         auth_headers["set_cookie"](client)
         client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(file_content), "data.json"),
@@ -423,7 +426,7 @@ class TestImportJsonResource:
         # Create non-UTF-8 content
         non_utf8_content = b"\xff\xfe"
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://localhost:5001/api/users",
                 "file": (io.BytesIO(non_utf8_content), "data.json"),
@@ -475,7 +478,7 @@ class TestImportJsonResource:
 
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://localhost:5001/api/tasks",
                 "file": (io.BytesIO(file_content), "tasks.json"),
@@ -526,7 +529,7 @@ class TestImportJsonResource:
 
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://localhost:5001/api/tasks",
                 "file": (io.BytesIO(file_content), "tasks.json"),
@@ -574,7 +577,7 @@ class TestImportJsonResource:
 
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://localhost:5001/api/tasks",
                 "file": (io.BytesIO(file_content), "tasks.json"),
@@ -621,7 +624,7 @@ class TestImportJsonResource:
 
         auth_headers["set_cookie"](client)
         response = client.post(
-            "/import",
+            "/import?type=json",
             data={
                 "url": "http://localhost:5001/api/categories",
                 "file": (io.BytesIO(file_content), "tree.json"),

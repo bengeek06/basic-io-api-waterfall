@@ -41,7 +41,7 @@ class HealthResource(Resource):
         # Basic service info
         health_data = {
             "status": "healthy",
-            "service": "template_service",
+            "service": "basic_io_service",
             "timestamp": datetime.now(timezone.utc)
             .isoformat()
             .replace("+00:00", "Z"),

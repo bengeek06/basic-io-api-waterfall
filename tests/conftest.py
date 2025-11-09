@@ -85,15 +85,15 @@ def auth_headers():
     company_id = "12345678-1234-5678-1234-567812345678"
     user_id = "87654321-4321-8765-4321-876543218765"
     token = create_jwt_token(company_id, user_id)
-    
+
     def set_cookie(client):
         """Helper function to set cookie on client."""
-        client.set_cookie('access_token', token)
-    
+        client.set_cookie("access_token", token)
+
     return {
         "Cookie": f"access_token={token}",
         "set_cookie": set_cookie,
-        "token": token
+        "token": token,
     }
 
 
@@ -101,6 +101,7 @@ def auth_headers():
 def mock_target_service():
     """Fixture to mock external service responses."""
     from unittest.mock import Mock
+
     return Mock()
 
 
