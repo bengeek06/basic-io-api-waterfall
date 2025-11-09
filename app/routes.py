@@ -13,6 +13,7 @@ from app.resources.version import VersionResource
 from app.resources.config import ConfigResource
 from app.resources.health import HealthResource
 from app.resources.export_json import ExportJsonResource
+from app.resources.import_json import ImportJsonResource
 
 
 def register_routes(app):
@@ -37,5 +38,6 @@ def register_routes(app):
 
     # Import/Export endpoints
     api.add_resource(ExportJsonResource, "/export")
+    api.add_resource(ImportJsonResource, "/import")
 
     logger.info("Routes registered successfully.")
