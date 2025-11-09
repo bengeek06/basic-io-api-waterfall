@@ -104,6 +104,31 @@ Export and import data as Mermaid diagrams:
 
 See [`openapi.yml`](openapi.yml) for full API documentation.
 
+## API Parameters
+
+### Export Parameters
+
+| Parameter      | Type    | Required | Default    | Description |
+|---------------|---------|----------|------------|-------------|
+| `url`         | string  | Yes      | -          | Target Waterfall service endpoint URL to export data from |
+| `type`        | string  | No       | `json`     | Export format: `json`, `csv`, or `mermaid` |
+| `enrich`      | boolean | No       | `true`     | Add reference metadata for intelligent import (JSON only). Detects foreign keys and adds `_references` with lookup information |
+| `tree`        | boolean | No       | `false`    | Convert flat list to nested tree structure (JSON only). Only applies when data has a `parent_id` field |
+| `diagram_type`| string  | No       | `flowchart`| Type of Mermaid diagram: `flowchart`, `graph`, or `mindmap` (Mermaid only) |
+| `lookup_config`| string | No       | -          | JSON string defining custom lookup fields for specific resource types. Format: `{"users": ["email"], "projects": ["name"]}` |
+
+### Import Parameters
+
+| Parameter              | Type    | Required | Default | Description |
+|-----------------------|---------|----------|---------|-------------|
+| `url`                 | string  | Yes      | -       | Target Waterfall service endpoint URL to import data to |
+| `type`                | string  | No       | `json`  | Import format: `json`, `csv`, or `mermaid` |
+| `resolve_foreign_keys`| boolean | No       | `true`  | Resolve foreign key references using enriched metadata |
+| `skip_on_ambiguous`   | boolean | No       | `true`  | Skip records with ambiguous references (multiple matches) |
+| `skip_on_missing`     | boolean | No       | `true`  | Skip records with missing references (no matches) |
+
+**Note:** The `enrich` parameter is highly recommended when exporting data that will be imported, as it enables automatic foreign key resolution during import.
+
 ---
 
 ## Quick Start
