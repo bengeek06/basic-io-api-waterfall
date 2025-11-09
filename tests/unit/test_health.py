@@ -24,7 +24,7 @@ class TestHealthEndpoint:
 
         data = response.get_json()
         assert data["status"] == "healthy"
-        assert data["service"] == "template_service"
+        assert data["service"] == "basic_io_service"
         assert "timestamp" in data
         assert "environment" in data
         assert "checks" in data
@@ -54,7 +54,7 @@ class TestHealthEndpoint:
 
             data = response.get_json()
             assert data["status"] == "unhealthy"
-            assert data["service"] == "template_service"
+            assert data["service"] == "basic_io_service"
 
             db_check = data["checks"]["database"]
             assert db_check["healthy"] is False
@@ -102,8 +102,8 @@ class TestHealthEndpoint:
         # Status should be either 'healthy' or 'unhealthy'
         assert data["status"] in ["healthy", "unhealthy"]
 
-        # Service should be template_service
-        assert data["service"] == "template_service"
+        # Service should be basic_io_service
+        assert data["service"] == "basic_io_service"
 
         # Checks should contain database
         assert "database" in data["checks"]
