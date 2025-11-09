@@ -7,6 +7,7 @@ from app.logger import logger
 from app.utils.auth import require_jwt_auth
 from app.resources.export_json import export_json
 from app.resources.export_csv import export_csv
+from app.resources.export_mermaid import export_mermaid
 
 
 class ExportResource(Resource):
@@ -46,4 +47,5 @@ class ExportResource(Resource):
             return export_csv()
 
         # export_type == "mermaid"
-        return {"message": "Mermaid export not yet implemented"}, 501
+        logger.info("Dispatching to Mermaid export handler")
+        return export_mermaid()
