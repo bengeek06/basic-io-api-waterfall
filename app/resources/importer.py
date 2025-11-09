@@ -7,6 +7,7 @@ from app.logger import logger
 from app.utils.auth import require_jwt_auth
 from app.resources.import_json import import_json
 from app.resources.import_csv import import_csv
+from app.resources.import_mermaid import import_mermaid
 
 
 class ImportResource(Resource):
@@ -48,4 +49,5 @@ class ImportResource(Resource):
             return import_csv()
 
         # import_type == "mermaid"
-        return {"message": "Mermaid import not yet implemented"}, 501
+        logger.info("Dispatching to Mermaid import handler")
+        return import_mermaid()
