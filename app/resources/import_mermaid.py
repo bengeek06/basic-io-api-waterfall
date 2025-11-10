@@ -522,10 +522,18 @@ def import_mermaid() -> Response:
             status=400,
             mimetype=MIME_JSON,
         )
-    except Exception as exc:  # pylint: disable=broad-except
-        logger.error(f"Import failed: {exc}")
+    except ValueError as exc:
+        # Data validation errors (malformed diagram, invalid structure)
+        logger.error(f"Data validation error: {exc}")
         return Response(
-            f'{{"message": "Import failed: {str(exc)}"}}',
+            f'{{"error": "Invalid Mermaid data", "detail": "{str(exc)}"}}',
+            status=400,
+            mimetype=MIME_JSON,
+        )
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.error(f"Import failed: {exc}", exc_info=True)
+        return Response(
+            f'{{"error": "Internal server error", "detail": "{str(exc)}"}}',
             status=500,
             mimetype=MIME_JSON,
         )

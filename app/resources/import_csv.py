@@ -90,7 +90,8 @@ def _parse_csv_row(row: Dict[str, str]) -> Dict[str, Any]:
     """
     parsed = {}
     for key, value in row.items():
-        if value == "":
+        # Handle None or empty string
+        if value is None or value == "":
             parsed[key] = None
         elif value.startswith("{") or value.startswith("["):
             # Try to parse as JSON
@@ -360,7 +361,11 @@ def import_csv():
         logger.info(f"Parsed {len(data)} records from CSV")
 
         # Prepare data
-        prepared_data, parent_field = _prepare_data(data)
+        try:
+            prepared_data, parent_field = _prepare_data(data)
+        except (ValueError, KeyError, AttributeError) as exc:
+            logger.error(f"Data preparation failed: {exc}")
+            return {"error": f"Invalid CSV data structure: {str(exc)}"}, 400
 
         # Import to target service
         cookies = {"access_token": request.cookies.get("access_token")}
@@ -375,6 +380,15 @@ def import_csv():
 
         return result, 200
 
+    except ValueError as exc:
+        # Data validation errors (malformed data, invalid structure)
+        logger.error(f"Data validation error: {exc}")
+        return {"error": f"Invalid data: {str(exc)}"}, 400
+
     except Exception as exc:  # pylint: disable=broad-except
-        logger.error(f"Unexpected error during import: {exc}")
-        return {"error": "Internal server error"}, 500
+        # Truly unexpected errors
+        logger.error(f"Unexpected error during import: {exc}", exc_info=True)
+        return {
+            "error": "Internal server error",
+            "detail": str(exc),
+        }, 500
