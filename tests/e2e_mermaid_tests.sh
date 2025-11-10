@@ -1,9 +1,24 @@
 #!/bin/bash
 # E2E Tests for Basic I/O Service - Mermaid Import/Export
 # Tests progression: Simple (customers) → Medium (subcontractors) → Complex (organization_units tree)
+#
+# Usage: ./e2e_mermaid_tests.sh EMAIL PASSWORD
+#   EMAIL    - Email for authentication
+#   PASSWORD - Password for authentication
 
 # Don't exit on error - we want to see all test results
 set +e
+
+# Parse arguments
+if [ $# -ne 2 ]; then
+    echo "Usage: $0 EMAIL PASSWORD"
+    echo "  EMAIL    - Email for authentication"
+    echo "  PASSWORD - Password for authentication"
+    exit 1
+fi
+
+AUTH_EMAIL="$1"
+AUTH_PASSWORD="$2"
 
 # Colors for output
 RED='\033[0;31m'
@@ -33,6 +48,7 @@ echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}  Basic I/O Service E2E Tests${NC}"
 echo -e "${BLUE}  Testing Mermaid Import/Export${NC}"
 echo -e "${BLUE}========================================${NC}"
+echo -e "${YELLOW}Authentication: ${AUTH_EMAIL}${NC}"
 echo ""
 
 # Function to print test header
@@ -82,10 +98,10 @@ test_header "Get JWT token from auth service"
 
 TOKEN_RESPONSE=$(curl -s -X POST "$AUTH_URL/login" \
     -H "Content-Type: application/json" \
-    -d '{
-        "email": "john@waterfall-project.pro",
-        "password": "X436W2w2!:"
-    }' \
+    -d "{
+        \"email\": \"$AUTH_EMAIL\",
+        \"password\": \"$AUTH_PASSWORD\"
+    }" \
     -c "$TEST_DIR/cookies.txt")
 
 # Extract token from cookies
