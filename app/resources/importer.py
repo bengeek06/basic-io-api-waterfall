@@ -30,7 +30,16 @@ class ImportResource(Resource):
         Returns:
             JSON: Import report with success/failure counts and ID mappings
         """
-        import_type = request.args.get("type", "json").lower()
+        # Log all received parameters
+        logger.info(
+            f"Import request - "
+            f"args={dict(request.args)}, "
+            f"form={dict(request.form)}, "
+            f"files={list(request.files.keys())}, "
+            f"file={request.files.get('file').filename if 'file' in request.files else None}"
+        )
+        
+        import_type = request.values.get("type", "json").lower()
 
         # Validate import type
         if import_type not in ["json", "csv", "mermaid"]:
@@ -41,13 +50,13 @@ class ImportResource(Resource):
 
         # Dispatch to appropriate handler
         if import_type == "json":
-            logger.info("Dispatching to JSON import handler")
+            logger.info(f"Dispatching to JSON import handler (type={import_type})")
             return import_json()
 
         if import_type == "csv":
-            logger.info("Dispatching to CSV import handler")
+            logger.info(f"Dispatching to CSV import handler (type={import_type})")
             return import_csv()
 
         # import_type == "mermaid"
-        logger.info("Dispatching to Mermaid import handler")
+        logger.info(f"Dispatching to Mermaid import handler (type={import_type})")
         return import_mermaid()
