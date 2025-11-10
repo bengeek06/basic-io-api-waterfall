@@ -432,10 +432,14 @@ def export_mermaid() -> Response:
             f"Exported {len(data)} records as Mermaid {diagram_type} from {target_url}"
         )
 
+        # Generate filename from URL
+        resource_name = target_url.rstrip("/").split("/")[-1]
+        filename = f"{resource_name}_export.mmd"
+
         # Return as text/plain with .mmd extension suggestion
         response = Response(mermaid_content, mimetype="text/plain")
         response.headers["Content-Disposition"] = (
-            "attachment; filename=export.mmd"
+            f'attachment; filename="{filename}"'
         )
         return response
 
