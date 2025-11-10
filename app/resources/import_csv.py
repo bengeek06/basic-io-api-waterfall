@@ -34,21 +34,28 @@ def _parse_csv_file(
         Tuple of (data, error_message)
     """
     if not file:
+        logger.error("No file provided in request")
         return None, "No file provided"
 
     if file.filename == "":
+        logger.error("Empty filename provided")
         return None, "Empty filename"
 
     if not file.filename.endswith(".csv"):
+        logger.error(f"Invalid file type: {file.filename}")
         return None, "File must be a CSV file (.csv)"
 
     try:
+        logger.info(f"Reading CSV file: {file.filename}")
         content = file.read().decode("utf-8")
         csv_reader = csv.DictReader(io.StringIO(content))
         data = list(csv_reader)
 
         if not data:
+            logger.error("CSV file is empty")
             return None, "CSV file is empty"
+
+        logger.info(f"CSV contains {len(data)} rows")
 
         # Convert CSV strings back to appropriate types
         parsed_data = []
@@ -56,11 +63,14 @@ def _parse_csv_file(
             parsed_row = _parse_csv_row(row)
             parsed_data.append(parsed_row)
 
+        logger.info(f"Successfully parsed {len(parsed_data)} records")
         return parsed_data, None
 
     except UnicodeDecodeError:
+        logger.error("File encoding error - not UTF-8")
         return None, "File encoding must be UTF-8"
     except csv.Error as exc:
+        logger.error(f"CSV parsing error: {exc}")
         return None, f"Invalid CSV format: {exc}"
 
 
@@ -144,6 +154,7 @@ def _import_records(  # pylint: disable=too-many-locals
     Returns:
         Import result dictionary with statistics
     """
+    logger.info(f"Starting import of {len(data)} records to {target_url}")
     id_mapping = {}
     import_report = {"success": 0, "failed": 0, "errors": []}
     resolution_report = {
@@ -157,6 +168,7 @@ def _import_records(  # pylint: disable=too-many-locals
         try:
             # Extract _original_id
             original_id = record.get("_original_id")
+            logger.debug(f"Processing record with _original_id={original_id}")
 
             # Remove metadata and read-only fields before import
             readonly_fields = {
@@ -172,6 +184,7 @@ def _import_records(  # pylint: disable=too-many-locals
                 and k not in readonly_fields
                 and v is not None
             }
+            logger.debug(f"Cleaned record: {list(clean_record.keys())}")
 
             # Resolve parent reference if tree structure
             if parent_field and parent_field in clean_record:
@@ -185,6 +198,7 @@ def _import_records(  # pylint: disable=too-many-locals
 
             # Resolve foreign key references if requested
             if resolve_fks and "_references" in record:
+                logger.debug(f"Resolving FKs: {list(record['_references'].keys())}")
                 _resolve_references(
                     clean_record,
                     record["_references"],
@@ -195,6 +209,7 @@ def _import_records(  # pylint: disable=too-many-locals
                 )
 
             # POST to target service
+            logger.debug(f"POSTing to {target_url}: {clean_record}")
             response = requests.post(
                 target_url, json=clean_record, cookies=cookies, timeout=30
             )
@@ -210,7 +225,16 @@ def _import_records(  # pylint: disable=too-many-locals
             import_report["success"] += 1
 
         except requests.exceptions.HTTPError as exc:
-            error_msg = f"Failed to import record: {exc.response.status_code}"
+            error_detail = ""
+            try:
+                error_detail = exc.response.json()
+            except Exception:  # pylint: disable=broad-except
+                error_detail = exc.response.text
+
+            error_msg = (
+                f"Failed to import record (original_id={original_id}): "
+                f"HTTP {exc.response.status_code} - {error_detail}"
+            )
             import_report["failed"] += 1
             import_report["errors"].append(error_msg)
             logger.error(error_msg)
@@ -317,12 +341,20 @@ def import_csv():
             request.form.get("resolve_foreign_keys", "true").lower() == "true"
         )
 
+        logger.info(
+            f"CSV import request - url={target_url}, "
+            f"resolve_fks={resolve_fks}, "
+            f"file={file.filename if file else None}"
+        )
+
         if not target_url:
+            logger.error("Missing 'url' parameter")
             return {"error": "Missing 'url' parameter"}, 400
 
         # Parse CSV file
         data, error = _parse_csv_file(file)
         if error:
+            logger.error(f"CSV parsing failed: {error}")
             return {"error": error}, 400
 
         logger.info(f"Parsed {len(data)} records from CSV")

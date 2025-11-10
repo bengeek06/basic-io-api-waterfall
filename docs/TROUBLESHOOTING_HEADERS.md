@@ -176,9 +176,37 @@ curl -I "http://localhost:3000/api/basic-io/export?url=http%3A%2F%2Fidentity_ser
 ## Common Symptoms
 
 ### Symptom 1: "Missing or invalid JWT token" (401)
-**Cause**: Proxy not forwarding cookies  
-**Evidence**: `web_service` logs show no `Cookie` in request headers  
-**Fix**: Add `'Cookie': request.headers.get('cookie')` to fetch headers
+**Cause**: Proxy not forwarding cookies OR client not sending cookies  
+**Evidence in logs**: 
+- If `web_service` shows NO `cookie` in "Request headers" → **Client problem**
+- If `web_service` shows `cookie` in request but not forwarded → **Proxy problem**
+
+**Debugging**:
+```bash
+# Check what headers client is sending
+# Look for "Request headers received from client:" in web_service logs
+docker compose logs web_service | grep "Request headers"
+
+# If no 'cookie' field → client needs to authenticate first
+# If 'cookie' present but not forwarded → proxy needs fixing
+```
+
+**Fix for client issue** (Python requests):
+```python
+# ❌ WRONG - Fresh session without login
+session = requests.Session()
+response = session.get("/api/basic-io/export")  # 401 - No cookies!
+
+# ✅ CORRECT - Login first to get cookies
+session = requests.Session()
+session.post("/api/auth/login", json={
+    "email": "user@example.com",
+    "password": "password"
+})  # Sets access_token cookie
+response = session.get("/api/basic-io/export")  # 200 - Cookies sent
+```
+
+**Fix for proxy issue**: Add `'Cookie': request.headers.get('cookie')` to fetch headers
 
 ### Symptom 2: Downloaded file has generic name
 **Cause**: Proxy not forwarding Content-Disposition  
@@ -193,3 +221,58 @@ curl -I "http://localhost:3000/api/basic-io/export?url=http%3A%2F%2Fidentity_ser
   - `app/resources/export_csv.py` (lines 192-196)
   - `app/resources/export_mermaid.py` (lines 435-442)
 - **HTTP Spec**: [RFC 6266 - Content-Disposition](https://tools.ietf.org/html/rfc6266)
+
+## Client-Side Issue: Not Sending Cookies
+
+If logs show **NO `cookie` in request headers**, the problem is the **client not authenticating**.
+
+### Common Causes
+
+1. **Fresh session without login**
+   ```python
+   session = requests.Session()  # No cookies
+   session.get("/api/basic-io/export")  # 401
+   ```
+
+2. **Expired cookies**
+   - Login was 24 hours ago, JWT expired
+   - Solution: Re-authenticate
+
+3. **Different session between tests**
+   ```python
+   session1.post("/api/auth/login")  # Sets cookies
+   session2.get("/api/basic-io/export")  # Different session, no cookies!
+   ```
+
+4. **Cookies not persisting**
+   - Check cookie domain/path
+   - Verify `session.cookies` after login
+
+### Client Fix Example
+
+```python
+class APIClient:
+    def __init__(self, base_url):
+        self.base_url = base_url
+        self.session = requests.Session()
+        self._authenticated = False
+    
+    def ensure_authenticated(self):
+        """Ensure session has valid authentication cookies"""
+        if not self._authenticated or 'access_token' not in self.session.cookies:
+            response = self.session.post(
+                f"{self.base_url}/api/auth/login",
+                json={"email": "user@example.com", "password": "password"}
+            )
+            if response.status_code != 200:
+                raise Exception("Login failed")
+            self._authenticated = True
+    
+    def get(self, path, **kwargs):
+        self.ensure_authenticated()
+        return self.session.get(f"{self.base_url}{path}", **kwargs)
+
+# Usage
+api = APIClient("http://localhost:3000")
+response = api.get("/api/basic-io/export?url=...&type=json")  # Auto-authenticates
+```

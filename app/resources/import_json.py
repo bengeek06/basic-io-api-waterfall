@@ -28,26 +28,34 @@ def _parse_file(file) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
         Tuple of (data, error_message)
     """
     if not file:
+        logger.error("No file provided")
         return None, "No file provided"
 
     if file.filename == "":
+        logger.error("Empty filename")
         return None, "Empty filename"
 
     if not file.filename.endswith(".json"):
+        logger.error(f"Invalid file type: {file.filename}")
         return None, "File must be a JSON file (.json)"
 
     try:
+        logger.info(f"Reading JSON file: {file.filename}")
         content = file.read().decode("utf-8")
         data = json.loads(content)
 
         if not isinstance(data, list):
+            logger.error("JSON file must be an array")
             return None, "JSON file must contain an array of records"
 
+        logger.info(f"JSON contains {len(data)} records")
         return data, None
 
     except UnicodeDecodeError:
+        logger.error("File encoding error - not UTF-8")
         return None, "File encoding must be UTF-8"
     except json.JSONDecodeError as exc:
+        logger.error(f"JSON parsing error: {exc}")
         return None, f"Invalid JSON format: {exc}"
 
 
@@ -357,6 +365,7 @@ def import_json():
     """
     # Get file from request
     if "file" not in request.files:
+        logger.error("No file provided in request")
         return {"message": "No file provided"}, 400
 
     file = request.files["file"]
@@ -364,9 +373,16 @@ def import_json():
     # Get URL from form data
     target_url = request.values.get("url")
     if not target_url:
+        logger.error("Missing 'url' parameter")
         return {"message": "Missing required parameter: url"}, 400
 
     resolve_refs = request.values.get("resolve_refs", "true").lower() == "true"
+
+    logger.info(
+        f"JSON import request - url={target_url}, "
+        f"resolve_refs={resolve_refs}, "
+        f"file={file.filename}"
+    )
 
     # Parse uploaded file
     logger.info(f"Parsing uploaded file for import to {target_url}")

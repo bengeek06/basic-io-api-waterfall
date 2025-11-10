@@ -413,8 +413,17 @@ def import_mermaid() -> Response:
     Returns:
         JSON response with import report
     """
+    # Get parameters
+    target_url = request.values.get("url")
+    
+    logger.info(
+        f"Mermaid import request - url={target_url}, "
+        f"file={request.files.get('file').filename if 'file' in request.files else None}"
+    )
+    
     # Validate file upload
     if "file" not in request.files:
+        logger.error("No file uploaded")
         return Response(
             '{"message": "No file uploaded"}',
             status=400,
@@ -423,6 +432,7 @@ def import_mermaid() -> Response:
 
     file: FileStorage = request.files["file"]
     if file.filename == "":
+        logger.error("No file selected")
         return Response(
             '{"message": "No file selected"}',
             status=400,
@@ -431,8 +441,10 @@ def import_mermaid() -> Response:
 
     try:
         # Read Mermaid content
+        logger.info(f"Reading Mermaid file: {file.filename}")
         content = file.read().decode("utf-8")
         lines = content.split("\n")
+        logger.info(f"File contains {len(lines)} lines")
 
         # Parse metadata
         metadata = _parse_metadata(lines)
@@ -441,11 +453,14 @@ def import_mermaid() -> Response:
         # Detect diagram type
         diagram_type = _detect_diagram_type(content)
         if not diagram_type:
+            logger.error("Could not detect diagram type")
             return Response(
                 '{"message": "Could not detect Mermaid diagram type"}',
                 status=400,
                 mimetype=MIME_JSON,
             )
+
+        logger.info(f"Detected diagram type: {diagram_type}")
 
         # Parse diagram based on type
         if diagram_type == "flowchart":
@@ -455,6 +470,7 @@ def import_mermaid() -> Response:
         elif diagram_type == "mindmap":
             records = _parse_mindmap(lines)
         else:
+            logger.error(f"Unsupported diagram type: {diagram_type}")
             return Response(
                 f'{{"message": "Unsupported diagram type: {diagram_type}"}}',
                 status=400,
@@ -468,11 +484,14 @@ def import_mermaid() -> Response:
         # Get target URL from query params
         target_url = request.values.get("url")
         if not target_url:
+            logger.error("Missing 'url' parameter")
             return Response(
                 '{"message": "Missing required parameter: url"}',
                 status=400,
                 mimetype=MIME_JSON,
             )
+
+        logger.info(f"Target URL: {target_url}")
 
         # Sort records if they have parent_id (tree structure)
         has_parent = any("parent_id" in r for r in records)
@@ -482,6 +501,7 @@ def import_mermaid() -> Response:
 
         # Import records
         cookies = {"access_token": request.cookies.get("access_token")}
+        logger.info(f"Starting import of {len(records)} records")
         result = _import_records(records, target_url, cookies)
 
         logger.info(
