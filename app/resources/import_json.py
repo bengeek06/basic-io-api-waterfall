@@ -95,6 +95,8 @@ def _resolve_single_reference(
     target_url: str,
     cookies: Dict[str, str],
     resolution_report: Dict[str, Any],
+    on_ambiguous: str = "skip",
+    on_missing: str = "skip",
 ) -> Optional[str]:
     """Resolve a single foreign key reference.
 
@@ -104,9 +106,11 @@ def _resolve_single_reference(
         target_url: Base URL of target service
         cookies: Authentication cookies
         resolution_report: Report dict to update
+        on_ambiguous: How to handle ambiguous references ("skip" or "fail")
+        on_missing: How to handle missing references ("skip" or "fail")
 
     Returns:
-        Resolved ID or None/original_id depending on resolution status
+        Resolved ID or None depending on resolution status and mode
     """
     status, resolved_id, candidates, error = resolve_reference(
         ref_metadata, target_url, cookies
@@ -128,6 +132,17 @@ def _resolve_single_reference(
                 "candidates": len(candidates),
             }
         )
+        # With skip mode: set FK to None instead of assigning random ID
+        # With fail mode: will be validated later in import_json()
+        if on_ambiguous == "skip":
+            logger.warning(
+                f"Ambiguous reference for {field_name}, setting to None (skip mode)"
+            )
+            return None
+        # fail mode: return original_id to track the issue
+        logger.warning(
+            f"Ambiguous reference for {field_name} (fail mode will reject import)"
+        )
         return ref_metadata.get("original_id")
 
     if status == "missing":
@@ -140,6 +155,16 @@ def _resolve_single_reference(
                 "error": error,
             }
         )
+        # Both skip and fail modes set FK to None
+        # fail mode will be validated later in import_json()
+        if on_missing == "skip":
+            logger.warning(
+                f"Missing reference for {field_name}, setting to None (skip mode)"
+            )
+        else:
+            logger.warning(
+                f"Missing reference for {field_name} (fail mode will reject import)"
+            )
         return None
 
     # error
@@ -158,6 +183,8 @@ def _resolve_references(
     records: List[Dict[str, Any]],
     target_url: str,
     cookies: Dict[str, str],
+    on_ambiguous: str = "skip",
+    on_missing: str = "skip",
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Resolve foreign key references for records.
 
@@ -165,6 +192,8 @@ def _resolve_references(
         records: List of records with _references metadata
         target_url: Base URL of target service
         cookies: Authentication cookies
+        on_ambiguous: How to handle ambiguous references ("skip" or "fail")
+        on_missing: How to handle missing references ("skip" or "fail")
 
     Returns:
         Tuple of (resolved_records, resolution_report)
@@ -196,6 +225,8 @@ def _resolve_references(
                 target_url,
                 cookies,
                 resolution_report,
+                on_ambiguous,
+                on_missing,
             )
             resolved_record[field_name] = resolved_id
 
@@ -351,7 +382,6 @@ def _import_records(
     return import_report
 
 
-#
 def import_json():
     """Import data from a JSON file to a Waterfall service endpoint.
 
@@ -359,6 +389,8 @@ def import_json():
         file: JSON file to import
         url (str): Target service URL to import to
         resolve_refs (bool): Resolve foreign key references (default: True)
+        on_ambiguous (str): How to handle ambiguous references - "skip" or "fail" (default: "skip")
+        on_missing (str): How to handle missing references - "skip" or "fail" (default: "skip")
 
     Returns:
         JSON response with import report
@@ -377,10 +409,24 @@ def import_json():
         return {"message": "Missing required parameter: url"}, 400
 
     resolve_refs = request.values.get("resolve_refs", "true").lower() == "true"
+    on_ambiguous = request.values.get("on_ambiguous", "skip").lower()
+    on_missing = request.values.get("on_missing", "skip").lower()
+
+    # Validate mode parameters
+    if on_ambiguous not in ["skip", "fail"]:
+        return {
+            "message": f"Invalid on_ambiguous mode: {on_ambiguous}. Must be 'skip' or 'fail'"
+        }, 400
+    if on_missing not in ["skip", "fail"]:
+        return {
+            "message": f"Invalid on_missing mode: {on_missing}. Must be 'skip' or 'fail'"
+        }, 400
 
     logger.info(
         f"JSON import request - url={target_url}, "
         f"resolve_refs={resolve_refs}, "
+        f"on_ambiguous={on_ambiguous}, "
+        f"on_missing={on_missing}, "
         f"file={file.filename}"
     )
 
@@ -405,10 +451,31 @@ def import_json():
         cookies = {"access_token": request.cookies.get("access_token")}
         logger.info("Resolving foreign key references")
         data, resolution_report = _resolve_references(
-            data, target_url, cookies
+            data, target_url, cookies, on_ambiguous, on_missing
         )
 
-        # Check for resolution issues
+        # Check for resolution issues based on fail modes
+        if on_ambiguous == "fail" and resolution_report["ambiguous"] > 0:
+            logger.error(
+                f"Import aborted: {resolution_report['ambiguous']} ambiguous reference(s) "
+                f"with on_ambiguous=fail mode"
+            )
+            return {
+                "message": "Import failed due to ambiguous references",
+                "resolution_report": resolution_report,
+            }, 400
+
+        if on_missing == "fail" and resolution_report["missing"] > 0:
+            logger.error(
+                f"Import aborted: {resolution_report['missing']} missing reference(s) "
+                f"with on_missing=fail mode"
+            )
+            return {
+                "message": "Import failed due to missing references",
+                "resolution_report": resolution_report,
+            }, 400
+
+        # Log warnings for skip mode
         if (
             resolution_report["ambiguous"] > 0
             or resolution_report["missing"] > 0

@@ -639,3 +639,346 @@ class TestImportJsonResource:
         assert data["import_report"]["failed"] == 1
         # Child has parent_id "parent-1" but parent-1 not in id_mapping
         # This triggers line 226 warning
+
+
+class TestImportJsonAmbiguousAndMissingModes:
+    """Tests for on_ambiguous and on_missing modes (Bug #4)."""
+
+    @patch("app.resources.import_json.requests.get")
+    @patch("app.resources.import_json.requests.post")
+    def test_ambiguous_skip_mode_sets_null(
+        self, mock_post, mock_get, client, auth_headers
+    ):
+        """Test ambiguous reference with skip mode sets FK to null."""
+        # Mock GET returning 2 matches (ambiguous)
+        mock_get_response = Mock()
+        mock_get_response.json.return_value = [
+            {"id": "id-1", "name": "Duplicate"},
+            {"id": "id-2", "name": "Duplicate"},
+        ]
+        mock_get_response.status_code = 200
+        mock_get.return_value = mock_get_response
+
+        # Mock POST for import
+        mock_post_response = Mock()
+        mock_post_response.json.return_value = {
+            "id": "new-task-id",
+            "name": "Task 1",
+            "project_id": None,
+        }
+        mock_post_response.status_code = 201
+        mock_post.return_value = mock_post_response
+
+        file_data = [
+            {
+                "_original_id": "task-1",
+                "name": "Task 1",
+                "_references": {
+                    "project_id": {
+                        "resource_type": "projects",
+                        "lookup_field": "name",
+                        "lookup_value": "Duplicate",
+                        "original_id": "old-project-id",
+                    }
+                },
+            }
+        ]
+        file_content = json.dumps(file_data).encode("utf-8")
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=json",
+            data={
+                "url": "http://localhost:5001/api/tasks",
+                "file": (io.BytesIO(file_content), "tasks.json"),
+                "resolve_refs": "true",
+                "on_ambiguous": "skip",
+            },
+        )
+
+        assert response.status_code == 201
+        data = json.loads(response.data)
+        assert data["import_report"]["success"] == 1
+        assert data["resolution_report"]["ambiguous"] == 1
+
+        # Verify FK was set to None (not random ID)
+        post_call = mock_post.call_args[1]["json"]
+        assert post_call["project_id"] is None
+
+    @patch("app.resources.import_json.requests.get")
+    def test_ambiguous_fail_mode_returns_400(
+        self, mock_get, client, auth_headers
+    ):
+        """Test ambiguous reference with fail mode returns 400."""
+        # Mock GET returning 2 matches (ambiguous)
+        mock_get_response = Mock()
+        mock_get_response.json.return_value = [
+            {"id": "id-1", "name": "Duplicate"},
+            {"id": "id-2", "name": "Duplicate"},
+        ]
+        mock_get_response.status_code = 200
+        mock_get.return_value = mock_get_response
+
+        file_data = [
+            {
+                "_original_id": "task-1",
+                "name": "Task 1",
+                "_references": {
+                    "project_id": {
+                        "resource_type": "projects",
+                        "lookup_field": "name",
+                        "lookup_value": "Duplicate",
+                        "original_id": "old-project-id",
+                    }
+                },
+            }
+        ]
+        file_content = json.dumps(file_data).encode("utf-8")
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=json",
+            data={
+                "url": "http://localhost:5001/api/tasks",
+                "file": (io.BytesIO(file_content), "tasks.json"),
+                "resolve_refs": "true",
+                "on_ambiguous": "fail",
+            },
+        )
+
+        # Should fail with 400
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert "ambiguous" in data["message"].lower()
+        assert data["resolution_report"]["ambiguous"] == 1
+        # No import should have occurred
+        assert "import_report" not in data
+
+    @patch("app.resources.import_json.requests.get")
+    @patch("app.resources.import_json.requests.post")
+    def test_missing_skip_mode_sets_null(
+        self, mock_post, mock_get, client, auth_headers
+    ):
+        """Test missing reference with skip mode sets FK to null."""
+        # Mock GET returning no matches
+        mock_get_response = Mock()
+        mock_get_response.json.return_value = []
+        mock_get_response.status_code = 200
+        mock_get.return_value = mock_get_response
+
+        # Mock POST for import
+        mock_post_response = Mock()
+        mock_post_response.json.return_value = {
+            "id": "new-task-id",
+            "name": "Task 1",
+            "project_id": None,
+        }
+        mock_post_response.status_code = 201
+        mock_post.return_value = mock_post_response
+
+        file_data = [
+            {
+                "_original_id": "task-1",
+                "name": "Task 1",
+                "_references": {
+                    "project_id": {
+                        "resource_type": "projects",
+                        "lookup_field": "name",
+                        "lookup_value": "NonExistent",
+                        "original_id": "old-project-id",
+                    }
+                },
+            }
+        ]
+        file_content = json.dumps(file_data).encode("utf-8")
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=json",
+            data={
+                "url": "http://localhost:5001/api/tasks",
+                "file": (io.BytesIO(file_content), "tasks.json"),
+                "resolve_refs": "true",
+                "on_missing": "skip",
+            },
+        )
+
+        assert response.status_code == 201
+        data = json.loads(response.data)
+        assert data["import_report"]["success"] == 1
+        assert data["resolution_report"]["missing"] == 1
+
+        # Verify FK was set to None
+        post_call = mock_post.call_args[1]["json"]
+        assert post_call["project_id"] is None
+
+    @patch("app.resources.import_json.requests.get")
+    def test_missing_fail_mode_returns_400(
+        self, mock_get, client, auth_headers
+    ):
+        """Test missing reference with fail mode returns 400."""
+        # Mock GET returning no matches
+        mock_get_response = Mock()
+        mock_get_response.json.return_value = []
+        mock_get_response.status_code = 200
+        mock_get.return_value = mock_get_response
+
+        file_data = [
+            {
+                "_original_id": "task-1",
+                "name": "Task 1",
+                "_references": {
+                    "project_id": {
+                        "resource_type": "projects",
+                        "lookup_field": "name",
+                        "lookup_value": "NonExistent",
+                        "original_id": "old-project-id",
+                    }
+                },
+            }
+        ]
+        file_content = json.dumps(file_data).encode("utf-8")
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=json",
+            data={
+                "url": "http://localhost:5001/api/tasks",
+                "file": (io.BytesIO(file_content), "tasks.json"),
+                "resolve_refs": "true",
+                "on_missing": "fail",
+            },
+        )
+
+        # Should fail with 400
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert "missing" in data["message"].lower()
+        assert data["resolution_report"]["missing"] == 1
+        # No import should have occurred
+        assert "import_report" not in data
+
+    def test_invalid_on_ambiguous_mode(self, client, auth_headers):
+        """Test error when on_ambiguous mode is invalid."""
+        file_content = json.dumps([{"name": "Test"}]).encode("utf-8")
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=json",
+            data={
+                "url": "http://localhost:5001/api/tasks",
+                "file": (io.BytesIO(file_content), "tasks.json"),
+                "on_ambiguous": "invalid_mode",
+            },
+        )
+
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert "on_ambiguous" in data["message"].lower()
+        assert (
+            "skip" in data["message"].lower()
+            or "fail" in data["message"].lower()
+        )
+
+    def test_invalid_on_missing_mode(self, client, auth_headers):
+        """Test error when on_missing mode is invalid."""
+        file_content = json.dumps([{"name": "Test"}]).encode("utf-8")
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=json",
+            data={
+                "url": "http://localhost:5001/api/tasks",
+                "file": (io.BytesIO(file_content), "tasks.json"),
+                "on_missing": "invalid_mode",
+            },
+        )
+
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert "on_missing" in data["message"].lower()
+        assert (
+            "skip" in data["message"].lower()
+            or "fail" in data["message"].lower()
+        )
+
+    @patch("app.resources.import_json.requests.get")
+    @patch("app.resources.import_json.requests.post")
+    def test_mixed_ambiguous_and_missing_with_skip(
+        self, mock_post, mock_get, client, auth_headers
+    ):
+        """Test handling both ambiguous and missing refs with skip mode."""
+
+        # Mock GET responses for different fields
+        def get_side_effect(url, **kwargs):
+            if "projects" in url:
+                # Ambiguous
+                response = Mock()
+                response.json.return_value = [
+                    {"id": "id-1", "name": "Duplicate"},
+                    {"id": "id-2", "name": "Duplicate"},
+                ]
+                response.status_code = 200
+                return response
+            else:  # users
+                # Missing
+                response = Mock()
+                response.json.return_value = []
+                response.status_code = 200
+                return response
+
+        mock_get.side_effect = get_side_effect
+
+        # Mock POST for import
+        mock_post_response = Mock()
+        mock_post_response.json.return_value = {
+            "id": "new-task-id",
+            "name": "Task 1",
+        }
+        mock_post_response.status_code = 201
+        mock_post.return_value = mock_post_response
+
+        file_data = [
+            {
+                "_original_id": "task-1",
+                "name": "Task 1",
+                "_references": {
+                    "project_id": {
+                        "resource_type": "projects",
+                        "lookup_field": "name",
+                        "lookup_value": "Duplicate",
+                        "original_id": "old-project",
+                    },
+                    "assigned_to": {
+                        "resource_type": "users",
+                        "lookup_field": "email",
+                        "lookup_value": "missing@example.com",
+                        "original_id": "old-user",
+                    },
+                },
+            }
+        ]
+        file_content = json.dumps(file_data).encode("utf-8")
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=json",
+            data={
+                "url": "http://localhost:5001/api/tasks",
+                "file": (io.BytesIO(file_content), "tasks.json"),
+                "resolve_refs": "true",
+                "on_ambiguous": "skip",
+                "on_missing": "skip",
+            },
+        )
+
+        assert response.status_code == 201
+        data = json.loads(response.data)
+        assert data["import_report"]["success"] == 1
+        assert data["resolution_report"]["ambiguous"] == 1
+        assert data["resolution_report"]["missing"] == 1
+
+        # Both FKs should be None
+        post_call = mock_post.call_args[1]["json"]
+        assert post_call["project_id"] is None
+        assert post_call["assigned_to"] is None
