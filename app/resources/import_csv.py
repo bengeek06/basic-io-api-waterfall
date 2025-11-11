@@ -142,6 +142,8 @@ def _import_records(  # pylint: disable=too-many-locals
     cookies: Dict[str, str],
     resolve_fks: bool,
     parent_field: Optional[str],
+    on_ambiguous: str = "skip",
+    on_missing: str = "skip",
 ) -> Dict[str, Any]:
     """Import records to target service.
 
@@ -151,6 +153,8 @@ def _import_records(  # pylint: disable=too-many-locals
         cookies: Authentication cookies
         resolve_fks: Whether to resolve foreign key references
         parent_field: Parent field name if tree structure
+        on_ambiguous: How to handle ambiguous references ("skip" or "fail")
+        on_missing: How to handle missing references ("skip" or "fail")
 
     Returns:
         Import result dictionary with statistics
@@ -199,7 +203,9 @@ def _import_records(  # pylint: disable=too-many-locals
 
             # Resolve foreign key references if requested
             if resolve_fks and "_references" in record:
-                logger.debug(f"Resolving FKs: {list(record['_references'].keys())}")
+                logger.debug(
+                    f"Resolving FKs: {list(record['_references'].keys())}"
+                )
                 _resolve_references(
                     clean_record,
                     record["_references"],
@@ -207,6 +213,8 @@ def _import_records(  # pylint: disable=too-many-locals
                     cookies,
                     id_mapping,
                     resolution_report,
+                    on_ambiguous,
+                    on_missing,
                 )
 
             # POST to target service
@@ -260,6 +268,8 @@ def _resolve_references(
     cookies: Dict[str, str],
     id_mapping: Dict[str, str],
     resolution_report: Dict[str, Any],
+    on_ambiguous: str = "skip",
+    on_missing: str = "skip",
 ) -> None:
     """Resolve foreign key references in a record.
 
@@ -270,6 +280,8 @@ def _resolve_references(
         cookies: Auth cookies
         id_mapping: Existing ID mappings
         resolution_report: Report to update
+        on_ambiguous: How to handle ambiguous references ("skip" or "fail")
+        on_missing: How to handle missing references ("skip" or "fail")
     """
     for field_name, ref_metadata in references.items():
         if field_name not in record:
@@ -285,7 +297,7 @@ def _resolve_references(
             continue
 
         # Try reference resolution using metadata from export
-        status, resolved_id, _candidates, _error = resolve_reference(
+        status, resolved_id, candidates, error = resolve_reference(
             ref_metadata, target_url, cookies
         )
 
@@ -300,17 +312,39 @@ def _resolve_references(
                     "field": field_name,
                     "value": field_value,
                     "status": "ambiguous",
+                    "candidates": len(candidates),
                 }
             )
-        else:
+            # Handle ambiguous based on mode
+            if on_ambiguous == "skip":
+                record[field_name] = None
+                logger.warning(
+                    f"Ambiguous reference for {field_name}, setting to None (skip mode)"
+                )
+            else:  # fail mode
+                logger.warning(
+                    f"Ambiguous reference for {field_name} (fail mode will reject import)"
+                )
+        else:  # missing
             resolution_report["missing"] += 1
             resolution_report["details"].append(
                 {
                     "field": field_name,
                     "value": field_value,
                     "status": "missing",
+                    "error": error,
                 }
             )
+            # Handle missing based on mode
+            if on_missing == "skip":
+                record[field_name] = None
+                logger.warning(
+                    f"Missing reference for {field_name}, setting to None (skip mode)"
+                )
+            else:  # fail mode
+                logger.warning(
+                    f"Missing reference for {field_name} (fail mode will reject import)"
+                )
 
 
 #
@@ -322,6 +356,8 @@ def import_csv():
         url: Target service URL
         resolve_foreign_keys: Whether to resolve FK references (default: true)
         lookup_fields: Comma-separated fields for FK lookup (default: name)
+        on_ambiguous: How to handle ambiguous references - "skip" or "fail" (default: "skip")
+        on_missing: How to handle missing references - "skip" or "fail" (default: "skip")
 
     Returns:
         JSON response with import statistics
@@ -333,6 +369,8 @@ def import_csv():
         url: http://service/api/users
         resolve_foreign_keys: true
         lookup_fields: name,code
+        on_ambiguous: skip
+        on_missing: skip
     """
     try:
         # Parse parameters
@@ -341,10 +379,24 @@ def import_csv():
         resolve_fks = (
             request.form.get("resolve_foreign_keys", "true").lower() == "true"
         )
+        on_ambiguous = request.form.get("on_ambiguous", "skip").lower()
+        on_missing = request.form.get("on_missing", "skip").lower()
+
+        # Validate mode parameters
+        if on_ambiguous not in ["skip", "fail"]:
+            return {
+                "error": f"Invalid on_ambiguous mode: {on_ambiguous}. Must be 'skip' or 'fail'"
+            }, 400
+        if on_missing not in ["skip", "fail"]:
+            return {
+                "error": f"Invalid on_missing mode: {on_missing}. Must be 'skip' or 'fail'"
+            }, 400
 
         logger.info(
             f"CSV import request - url={target_url}, "
             f"resolve_fks={resolve_fks}, "
+            f"on_ambiguous={on_ambiguous}, "
+            f"on_missing={on_missing}, "
             f"file={file.filename if file else None}"
         )
 
@@ -370,8 +422,38 @@ def import_csv():
         # Import to target service
         cookies = {"access_token": request.cookies.get("access_token")}
         result = _import_records(
-            prepared_data, target_url, cookies, resolve_fks, parent_field
+            prepared_data,
+            target_url,
+            cookies,
+            resolve_fks,
+            parent_field,
+            on_ambiguous,
+            on_missing,
         )
+
+        # Check for resolution issues based on fail modes
+        if resolve_fks and result["resolution_report"]:
+            resolution_report = result["resolution_report"]
+
+            if on_ambiguous == "fail" and resolution_report["ambiguous"] > 0:
+                logger.error(
+                    f"Import aborted: {resolution_report['ambiguous']} ambiguous reference(s) "
+                    f"with on_ambiguous=fail mode"
+                )
+                return {
+                    "error": "Import failed due to ambiguous references",
+                    "resolution_report": resolution_report,
+                }, 400
+
+            if on_missing == "fail" and resolution_report["missing"] > 0:
+                logger.error(
+                    f"Import aborted: {resolution_report['missing']} missing reference(s) "
+                    f"with on_missing=fail mode"
+                )
+                return {
+                    "error": "Import failed due to missing references",
+                    "resolution_report": resolution_report,
+                }, 400
 
         logger.info(
             f"Import completed: {result['import_report']['success']} success, "
