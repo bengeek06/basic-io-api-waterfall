@@ -45,7 +45,7 @@ def pluralize(word: str) -> str:
     # Check custom mappings first
     if word in PLURALIZATION_MAP:
         return PLURALIZATION_MAP[word]
-    
+
     # Apply simple English pluralization rules
     if word.endswith("y") and len(word) > 1 and word[-2] not in "aeiou":
         return word[:-1] + "ies"
@@ -53,10 +53,15 @@ def pluralize(word: str) -> str:
         return word + "es"
     return word + "s"
 
+
 # Default lookup fields for common resource types
 DEFAULT_LOOKUP_CONFIG = {
     "users": ["email"],
     "companies": ["name"],
+    "positions": ["title"],
+    "organization_units": ["name"],
+    "customers": ["name"],
+    "subcontractors": ["name"],
     "projects": ["name"],
     "tasks": ["name"],
     "roles": ["name"],
@@ -92,7 +97,7 @@ def detect_foreign_keys(record: Dict[str, Any]) -> List[str]:
     """
     # Technical fields that look like FKs but aren't real foreign keys
     excluded_fields = {"_original_id", "id"}
-    
+
     fk_fields = []
     for field_name, field_value in record.items():
         if field_name in excluded_fields:
@@ -168,9 +173,9 @@ def _fetch_lookup_value(
         logger.warning(
             f"Failed to fetch {fetch_url}: status={response.status_code}"
         )
-    except Exception as exc:
-        # If fetch fails, return None
-        # Import will need to handle this gracefully
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        # Defensive: catch all exceptions to avoid breaking export
+        # Import will handle None gracefully
         logger.warning(f"Exception fetching lookup value: {exc}")
     return None
 
@@ -313,13 +318,23 @@ def resolve_reference(
         )
 
     # Build query URL
+    # Note: Some services may not support query parameters, so we fetch all records
+    # and filter client-side for exact matches
     base_url = target_url.rstrip("/").rsplit("/", 1)[0]
-    query_url = f"{base_url}/{resource_type}?{lookup_field}={lookup_value}"
+    query_url = f"{base_url}/{resource_type}"
 
     try:
         response = requests.get(query_url, cookies=cookies, timeout=30)
         response.raise_for_status()
-        matches = response.json()
+        all_records = response.json()
+
+        # Filter for exact matches client-side
+        # This handles services that don't support query parameter filtering
+        matches = [
+            record
+            for record in all_records
+            if record.get(lookup_field) == lookup_value
+        ]
 
         if not matches:
             return (
@@ -332,7 +347,7 @@ def resolve_reference(
 
         if len(matches) == 1:
             # Exactly one match - resolved!
-            return "resolved", matches[0].get("id"), [], None
+            return "resolved", matches[0].get("id"), matches, None
 
         # Multiple matches - ambiguous
         return (

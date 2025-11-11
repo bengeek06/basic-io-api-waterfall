@@ -338,7 +338,9 @@ Some random text here
         assert data["successful_imports"] == 1
 
     @patch("app.resources.import_mermaid.requests.post")
-    def test_empty_mermaid_diagram(self, mock_post, client, auth_headers):
+    def test_empty_mermaid_diagram(
+        self, mock_post, client, auth_headers
+    ):  # pylint: disable=unused-argument
         """Test importing an empty diagram."""
         mermaid_content = """flowchart TD
     %% Empty diagram
@@ -439,3 +441,356 @@ Some random text here
         assert data["total_records"] == 2
         assert data["successful_imports"] == 1
         assert data["failed_imports"] == 1
+
+
+class TestMermaidNodeParsing:
+    """Tests for Mermaid node definition parsing with various bracket types."""
+
+    @patch("app.resources.import_mermaid.requests.post")
+    def test_parse_node_with_square_brackets(
+        self, mock_post, client, auth_headers
+    ):
+        """Test parsing node with standard square brackets [text]."""
+        mermaid_content = """flowchart TD
+    A[Rectangle Node]
+"""
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "id": "new-1",
+            "name": "Rectangle Node",
+        }
+        mock_response.status_code = 201
+        mock_post.return_value = mock_response
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=mermaid&url=http://localhost:5001/api/test",
+            data={"file": (io.BytesIO(mermaid_content.encode()), "test.mmd")},
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["successful_imports"] == 1
+
+        # Verify correct name was parsed
+        call_args = mock_post.call_args
+        posted_data = call_args[1]["json"]
+        assert posted_data["name"] == "Rectangle Node"
+
+    @patch("app.resources.import_mermaid.requests.post")
+    def test_parse_node_with_parentheses(
+        self, mock_post, client, auth_headers
+    ):
+        """Test parsing node with parentheses (text) - rounded rectangle."""
+        mermaid_content = """flowchart TD
+    B(Rounded Node)
+"""
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "id": "new-1",
+            "name": "Rounded Node",
+        }
+        mock_response.status_code = 201
+        mock_post.return_value = mock_response
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=mermaid&url=http://localhost:5001/api/test",
+            data={"file": (io.BytesIO(mermaid_content.encode()), "test.mmd")},
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["successful_imports"] == 1
+
+        call_args = mock_post.call_args
+        posted_data = call_args[1]["json"]
+        assert posted_data["name"] == "Rounded Node"
+
+    @patch("app.resources.import_mermaid.requests.post")
+    def test_parse_node_with_curly_braces(
+        self, mock_post, client, auth_headers
+    ):
+        """Test parsing node with curly braces {text} - rhombus/decision."""
+        mermaid_content = """flowchart TD
+    C{Decision Node}
+"""
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "id": "new-1",
+            "name": "Decision Node",
+        }
+        mock_response.status_code = 201
+        mock_post.return_value = mock_response
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=mermaid&url=http://localhost:5001/api/test",
+            data={"file": (io.BytesIO(mermaid_content.encode()), "test.mmd")},
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["successful_imports"] == 1
+
+        call_args = mock_post.call_args
+        posted_data = call_args[1]["json"]
+        assert posted_data["name"] == "Decision Node"
+
+    @patch("app.resources.import_mermaid.requests.post")
+    def test_parse_node_with_double_parentheses(
+        self, mock_post, client, auth_headers
+    ):
+        """Test parsing node with double parentheses ((text)) - circle."""
+        mermaid_content = """flowchart TD
+    D((Circle Node))
+"""
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "id": "new-1",
+            "name": "Circle Node",
+        }
+        mock_response.status_code = 201
+        mock_post.return_value = mock_response
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=mermaid&url=http://localhost:5001/api/test",
+            data={"file": (io.BytesIO(mermaid_content.encode()), "test.mmd")},
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["successful_imports"] == 1
+
+        call_args = mock_post.call_args
+        posted_data = call_args[1]["json"]
+        assert posted_data["name"] == "Circle Node"
+
+    @patch("app.resources.import_mermaid.requests.post")
+    def test_parse_node_with_double_square_brackets(
+        self, mock_post, client, auth_headers
+    ):
+        """Test parsing node with double brackets [[text]] - subroutine."""
+        mermaid_content = """flowchart TD
+    E[[Subroutine Node]]
+"""
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "id": "new-1",
+            "name": "Subroutine Node",
+        }
+        mock_response.status_code = 201
+        mock_post.return_value = mock_response
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=mermaid&url=http://localhost:5001/api/test",
+            data={"file": (io.BytesIO(mermaid_content.encode()), "test.mmd")},
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["successful_imports"] == 1
+
+        call_args = mock_post.call_args
+        posted_data = call_args[1]["json"]
+        assert posted_data["name"] == "Subroutine Node"
+
+
+class TestMermaidArrowParsing:
+    """Tests for Mermaid arrow/edge parsing with various arrow types."""
+
+    @patch("app.resources.import_mermaid.requests.post")
+    def test_parse_arrow_standard_directional(
+        self, mock_post, client, auth_headers
+    ):
+        """Test parsing standard directional arrow -->."""
+        mermaid_content = """flowchart TD
+    A[Node A]
+    B[Node B]
+    A --> B
+"""
+        responses = [
+            {"id": "id-a", "name": "Node A"},
+            {"id": "id-b", "name": "Node B"},
+        ]
+        mock_responses = [
+            Mock(json=Mock(return_value=r), status_code=201) for r in responses
+        ]
+        mock_post.side_effect = mock_responses
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=mermaid&url=http://localhost:5001/api/test",
+            data={"file": (io.BytesIO(mermaid_content.encode()), "test.mmd")},
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["successful_imports"] == 2
+
+    @patch("app.resources.import_mermaid.requests.post")
+    def test_parse_arrow_undirected_line(
+        self, mock_post, client, auth_headers
+    ):
+        """Test parsing undirected line ---."""
+        mermaid_content = """graph TD
+    A[Node A]
+    B[Node B]
+    A --- B
+"""
+        responses = [
+            {"id": "id-a", "name": "Node A"},
+            {"id": "id-b", "name": "Node B"},
+        ]
+        mock_responses = [
+            Mock(json=Mock(return_value=r), status_code=201) for r in responses
+        ]
+        mock_post.side_effect = mock_responses
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=mermaid&url=http://localhost:5001/api/test",
+            data={"file": (io.BytesIO(mermaid_content.encode()), "test.mmd")},
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["successful_imports"] == 2
+
+    @patch("app.resources.import_mermaid.requests.post")
+    def test_parse_arrow_thick(self, mock_post, client, auth_headers):
+        """Test parsing thick arrow ==>."""
+        mermaid_content = """flowchart TD
+    A[Node A]
+    B[Node B]
+    A ==> B
+"""
+        responses = [
+            {"id": "id-a", "name": "Node A"},
+            {"id": "id-b", "name": "Node B"},
+        ]
+        mock_responses = [
+            Mock(json=Mock(return_value=r), status_code=201) for r in responses
+        ]
+        mock_post.side_effect = mock_responses
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=mermaid&url=http://localhost:5001/api/test",
+            data={"file": (io.BytesIO(mermaid_content.encode()), "test.mmd")},
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["successful_imports"] == 2
+
+    @patch("app.resources.import_mermaid.requests.post")
+    def test_parse_arrow_dotted(self, mock_post, client, auth_headers):
+        """Test parsing dotted arrow -.->."""
+        mermaid_content = """flowchart TD
+    A[Node A]
+    B[Node B]
+    A -.-> B
+"""
+        responses = [
+            {"id": "id-a", "name": "Node A"},
+            {"id": "id-b", "name": "Node B"},
+        ]
+        mock_responses = [
+            Mock(json=Mock(return_value=r), status_code=201) for r in responses
+        ]
+        mock_post.side_effect = mock_responses
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=mermaid&url=http://localhost:5001/api/test",
+            data={"file": (io.BytesIO(mermaid_content.encode()), "test.mmd")},
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["successful_imports"] == 2
+
+
+class TestMermaidSyntaxValidation:
+    """Tests for Mermaid syntax validation."""
+
+    def test_unclosed_bracket_validation(self, client, auth_headers):
+        """Test that unclosed brackets are detected and rejected."""
+        mermaid_content = """flowchart TD
+    A[Node A
+    B[Node B]
+"""
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=mermaid&url=http://localhost:5001/api/test",
+            data={"file": (io.BytesIO(mermaid_content.encode()), "test.mmd")},
+        )
+
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert "bracket" in data["message"].lower()
+
+    def test_invalid_arrow_validation(self, client, auth_headers):
+        """Test that invalid arrows are detected and rejected."""
+        mermaid_content = """flowchart TD
+    A[Node A]
+    B[Node B]
+    A ->-> B
+"""
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=mermaid&url=http://localhost:5001/api/test",
+            data={"file": (io.BytesIO(mermaid_content.encode()), "test.mmd")},
+        )
+
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert "arrow" in data["message"].lower()
+
+    def test_duplicate_node_id_validation(self, client, auth_headers):
+        """Test that duplicate node IDs are detected and rejected."""
+        mermaid_content = """flowchart TD
+    A[First Node]
+    A[Duplicate Node]
+"""
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=mermaid&url=http://localhost:5001/api/test",
+            data={"file": (io.BytesIO(mermaid_content.encode()), "test.mmd")},
+        )
+
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert "duplicate" in data["message"].lower()
+
+    def test_valid_diagram_passes_validation(self, client, auth_headers):
+        """Test that valid diagrams pass validation."""
+        mermaid_content = """flowchart TD
+    A[Node A]
+    B[Node B]
+    A --> B
+"""
+        auth_headers["set_cookie"](client)
+
+        with patch("app.resources.import_mermaid.requests.post") as mock_post:
+            responses = [
+                {"id": "id-a", "name": "Node A"},
+                {"id": "id-b", "name": "Node B"},
+            ]
+            mock_responses = [
+                Mock(json=Mock(return_value=r), status_code=201)
+                for r in responses
+            ]
+            mock_post.side_effect = mock_responses
+
+            response = client.post(
+                "/import?type=mermaid&url=http://localhost:5001/api/test",
+                data={
+                    "file": (io.BytesIO(mermaid_content.encode()), "test.mmd")
+                },
+            )
+
+            assert response.status_code == 200
