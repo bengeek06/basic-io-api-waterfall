@@ -144,7 +144,7 @@ def export_json() -> Response:
         # Extract base URL for fetching referenced resources
         # e.g., http://identity_service:5000/customers -> http://identity_service:5000
         base_url = "/".join(target_url.rstrip("/").split("/")[:-1])
-        
+
         # Get cookies from current request for authentication
         cookies = request.cookies.to_dict() if request.cookies else None
 

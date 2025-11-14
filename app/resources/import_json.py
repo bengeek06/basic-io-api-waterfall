@@ -382,6 +382,7 @@ def _import_records(
     return import_report
 
 
+# pylint: disable=too-many-branches
 def import_json():
     """Import data from a JSON file to a Waterfall service endpoint.
 
