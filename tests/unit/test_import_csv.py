@@ -439,3 +439,210 @@ class TestImportCsvResource:
             "utf-8" in data["error"].lower()
             or "encoding" in data["error"].lower()
         )
+
+
+class TestImportCsvAmbiguousAndMissingModes:
+    """Tests for on_ambiguous and on_missing modes in CSV import."""
+
+    @patch("app.resources.import_csv.requests.get")
+    @patch("app.resources.import_csv.requests.post")
+    def test_ambiguous_skip_mode_sets_null(
+        self, mock_post, mock_get, client, auth_headers
+    ):
+        """Test ambiguous reference with skip mode sets FK to null."""
+        # Mock GET returning 2 matches (ambiguous)
+        mock_get_response = Mock()
+        mock_get_response.json.return_value = [
+            {"id": "id-1", "name": "Duplicate"},
+            {"id": "id-2", "name": "Duplicate"},
+        ]
+        mock_get_response.status_code = 200
+        mock_get.return_value = mock_get_response
+
+        # Mock POST for import
+        mock_post_response = Mock()
+        mock_post_response.json.return_value = {
+            "id": "new-id",
+            "name": "Task 1",
+            "project_id": None,
+        }
+        mock_post_response.status_code = 201
+        mock_post.return_value = mock_post_response
+
+        # Create CSV with reference (project_id field included)
+        csv_content = (
+            "_original_id,name,project_id,_references\n"
+            'task-1,Task 1,old-proj-id,"{""project_id"":{""resource_type"":""projects"",""lookup_field"":""name"",""lookup_value"":""Duplicate"",""original_id"":""old-proj""}}"\n'
+        )
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=csv",
+            data={
+                "url": "http://localhost:5001/api/tasks",
+                "file": (io.BytesIO(csv_content.encode()), "data.csv"),
+                "resolve_foreign_keys": "true",
+                "on_ambiguous": "skip",
+            },
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["import_report"]["success"] == 1
+        assert data["resolution_report"]["ambiguous"] == 1
+
+        # Verify FK was set to None
+        post_call = mock_post.call_args[1]["json"]
+        assert post_call.get("project_id") is None
+
+    @patch("app.resources.import_csv.requests.get")
+    def test_ambiguous_fail_mode_returns_400(
+        self, mock_get, client, auth_headers
+    ):
+        """Test ambiguous reference with fail mode returns 400."""
+        # Mock GET returning 2 matches (ambiguous)
+        mock_get_response = Mock()
+        mock_get_response.json.return_value = [
+            {"id": "id-1", "name": "Duplicate"},
+            {"id": "id-2", "name": "Duplicate"},
+        ]
+        mock_get_response.status_code = 200
+        mock_get.return_value = mock_get_response
+
+        csv_content = (
+            "_original_id,name,project_id,_references\n"
+            'task-1,Task 1,old-proj-id,"{""project_id"":{""resource_type"":""projects"",""lookup_field"":""name"",""lookup_value"":""Duplicate"",""original_id"":""old-proj""}}"\n'
+        )
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=csv",
+            data={
+                "url": "http://localhost:5001/api/tasks",
+                "file": (io.BytesIO(csv_content.encode()), "data.csv"),
+                "resolve_foreign_keys": "true",
+                "on_ambiguous": "fail",
+            },
+        )
+
+        # Should fail with 400
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert "ambiguous" in data["error"].lower()
+        assert data["resolution_report"]["ambiguous"] == 1
+
+    @patch("app.resources.import_csv.requests.get")
+    @patch("app.resources.import_csv.requests.post")
+    def test_missing_skip_mode_sets_null(
+        self, mock_post, mock_get, client, auth_headers
+    ):
+        """Test missing reference with skip mode sets FK to null."""
+        # Mock GET returning no matches
+        mock_get_response = Mock()
+        mock_get_response.json.return_value = []
+        mock_get_response.status_code = 200
+        mock_get.return_value = mock_get_response
+
+        # Mock POST for import
+        mock_post_response = Mock()
+        mock_post_response.json.return_value = {
+            "id": "new-id",
+            "name": "Task 1",
+            "project_id": None,
+        }
+        mock_post_response.status_code = 201
+        mock_post.return_value = mock_post_response
+
+        csv_content = (
+            "_original_id,name,project_id,_references\n"
+            'task-1,Task 1,old-proj-id,"{""project_id"":{""resource_type"":""projects"",""lookup_field"":""name"",""lookup_value"":""NonExistent"",""original_id"":""old-proj""}}"\n'
+        )
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=csv",
+            data={
+                "url": "http://localhost:5001/api/tasks",
+                "file": (io.BytesIO(csv_content.encode()), "data.csv"),
+                "resolve_foreign_keys": "true",
+                "on_missing": "skip",
+            },
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["import_report"]["success"] == 1
+        assert data["resolution_report"]["missing"] == 1
+
+        # Verify FK was set to None
+        post_call = mock_post.call_args[1]["json"]
+        assert post_call.get("project_id") is None
+
+    @patch("app.resources.import_csv.requests.get")
+    def test_missing_fail_mode_returns_400(
+        self, mock_get, client, auth_headers
+    ):
+        """Test missing reference with fail mode returns 400."""
+        # Mock GET returning no matches
+        mock_get_response = Mock()
+        mock_get_response.json.return_value = []
+        mock_get_response.status_code = 200
+        mock_get.return_value = mock_get_response
+
+        csv_content = (
+            "_original_id,name,project_id,_references\n"
+            'task-1,Task 1,old-proj-id,"{""project_id"":{""resource_type"":""projects"",""lookup_field"":""name"",""lookup_value"":""NonExistent"",""original_id"":""old-proj""}}"\n'
+        )
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=csv",
+            data={
+                "url": "http://localhost:5001/api/tasks",
+                "file": (io.BytesIO(csv_content.encode()), "data.csv"),
+                "resolve_foreign_keys": "true",
+                "on_missing": "fail",
+            },
+        )
+
+        # Should fail with 400
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert "missing" in data["error"].lower()
+        assert data["resolution_report"]["missing"] == 1
+
+    def test_invalid_on_ambiguous_mode(self, client, auth_headers):
+        """Test error when on_ambiguous mode is invalid."""
+        csv_content = "_original_id,name\ntask-1,Task 1\n"
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=csv",
+            data={
+                "url": "http://localhost:5001/api/tasks",
+                "file": (io.BytesIO(csv_content.encode()), "data.csv"),
+                "on_ambiguous": "invalid_mode",
+            },
+        )
+
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert "on_ambiguous" in data["error"].lower()
+
+    def test_invalid_on_missing_mode(self, client, auth_headers):
+        """Test error when on_missing mode is invalid."""
+        csv_content = "_original_id,name\ntask-1,Task 1\n"
+
+        auth_headers["set_cookie"](client)
+        response = client.post(
+            "/import?type=csv",
+            data={
+                "url": "http://localhost:5001/api/tasks",
+                "file": (io.BytesIO(csv_content.encode()), "data.csv"),
+                "on_missing": "invalid_mode",
+            },
+        )
+
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert "on_missing" in data["error"].lower()

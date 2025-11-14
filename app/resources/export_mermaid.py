@@ -99,7 +99,10 @@ def _get_label_field(record: Dict[str, Any]) -> str:
 
 
 def _generate_metadata(
-    data: List[Dict[str, Any]], target_url: str, diagram_type: str
+    data: List[Dict[str, Any]],
+    target_url: str,
+    diagram_type: str,
+    is_tree: bool = False,
 ) -> List[str]:
     """Generate metadata comments for the Mermaid diagram.
 
@@ -107,6 +110,7 @@ def _generate_metadata(
         data: The data records
         target_url: The source URL
         diagram_type: The diagram type
+        is_tree: Whether data has tree structure
 
     Returns:
         List of metadata comment lines
@@ -122,6 +126,7 @@ def _generate_metadata(
         f"%% total_nodes: {len(data)}",
         f"%% service_url: {target_url}",
         f"%% diagram_type: {diagram_type}",
+        f"%% is_tree: {str(is_tree).lower()}",
     ]
 
     return metadata
@@ -219,13 +224,13 @@ def _generate_flowchart(data: List[Dict[str, Any]], target_url: str) -> str:
     """
     lines = ["%%{init: {'theme':'base'}}%%", "flowchart TD"]
 
-    # Add metadata
-    lines.extend(_generate_metadata(data, target_url, "flowchart"))
-    lines.append("")
-
     # Detect tree structure
     parent_key = detect_tree_structure(data)
     is_tree = parent_key is not None
+
+    # Add metadata
+    lines.extend(_generate_metadata(data, target_url, "flowchart", is_tree))
+    lines.append("")
 
     # Generate nodes
     lines.extend(_generate_flowchart_nodes(data))
@@ -255,13 +260,13 @@ def _generate_graph(data: List[Dict[str, Any]], target_url: str) -> str:
     """
     lines = ["graph TD"]
 
-    # Add metadata
-    lines.extend(_generate_metadata(data, target_url, "graph"))
-    lines.append("")
-
     # Detect tree structure
     parent_key = detect_tree_structure(data)
     is_tree = parent_key is not None
+
+    # Add metadata
+    lines.extend(_generate_metadata(data, target_url, "graph", is_tree))
+    lines.append("")
 
     # Generate nodes
     for record in data:
@@ -328,13 +333,13 @@ def _generate_mindmap(data: List[Dict[str, Any]], target_url: str) -> str:
     """
     lines = ["mindmap"]
 
-    # Add metadata
-    lines.extend(_generate_metadata(data, target_url, "mindmap"))
-    lines.append("")
-
     # Detect tree structure
     parent_key = detect_tree_structure(data)
     is_tree = parent_key is not None
+
+    # Add metadata
+    lines.extend(_generate_metadata(data, target_url, "mindmap", is_tree))
+    lines.append("")
 
     if not is_tree or not data:
         # Mindmaps work best with tree structures
@@ -427,10 +432,14 @@ def export_mermaid() -> Response:
             f"Exported {len(data)} records as Mermaid {diagram_type} from {target_url}"
         )
 
+        # Generate filename from URL
+        resource_name = target_url.rstrip("/").split("/")[-1]
+        filename = f"{resource_name}_export.mmd"
+
         # Return as text/plain with .mmd extension suggestion
         response = Response(mermaid_content, mimetype="text/plain")
         response.headers["Content-Disposition"] = (
-            "attachment; filename=export.mmd"
+            f'attachment; filename="{filename}"'
         )
         return response
 

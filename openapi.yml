@@ -907,27 +907,31 @@ paths:
             - mermaid: Mermaid diagram syntax
           example: "json"
         
-        - name: skip_on_ambiguous
+        - name: on_ambiguous
           in: query
           required: false
           schema:
-            type: boolean
-            default: true
+            type: string
+            enum: [skip, fail]
+            default: skip
           description: |
-            Skip records with ambiguous references (multiple matches).
-            If false, import will fail with error report when ambiguities are found.
-          example: true
+            Behavior when a foreign key reference has multiple matches (ambiguous):
+            - skip: Set the FK field to null and continue import (default)
+            - fail: Abort the entire import operation with a 400 error
+          example: "skip"
         
-        - name: skip_on_missing
+        - name: on_missing
           in: query
           required: false
           schema:
-            type: boolean
-            default: true
+            type: string
+            enum: [skip, fail]
+            default: skip
           description: |
-            Skip records with missing references (no matches).
-            If false, import will fail with error report when references are missing.
-          example: true
+            Behavior when a foreign key reference has no matches (missing):
+            - skip: Set the FK field to null and continue import (default)
+            - fail: Abort the entire import operation with a 400 error
+          example: "skip"
         
         - name: detect_cycles
           in: query
@@ -1060,6 +1064,37 @@ paths:
                   summary: Unsupported file type
                   value:
                     message: "Unsupported import type. Allowed values: json, csv, mermaid"
+                
+                on_ambiguous:
+                  summary: Invalid on_ambiguous mode
+                  value:
+                    message: "Invalid on_ambiguous mode. Allowed values: skip, fail"
+                
+                on_missing:
+                  summary: Invalid on_missing mode
+                  value:
+                    message: "Invalid on_missing mode. Allowed values: skip, fail"
+                
+                ambiguous_fail_mode:
+                  summary: Import aborted due to ambiguous reference (on_ambiguous=fail)
+                  value:
+                    message: "Import aborted: Ambiguous reference found for field 'assigned_to'"
+                    errors:
+                      type: "AmbiguousReferenceError"
+                      field: "assigned_to"
+                      lookup_attempted: "email=john@example.com"
+                      candidates_count: 2
+                      details: "Multiple matches found. Use on_ambiguous=skip to set FK to null and continue."
+                
+                missing_fail_mode:
+                  summary: Import aborted due to missing reference (on_missing=fail)
+                  value:
+                    message: "Import aborted: Missing reference for field 'project_id'"
+                    errors:
+                      type: "MissingReferenceError"
+                      field: "project_id"
+                      lookup_attempted: "name=Old Project"
+                      details: "No match found. Use on_missing=skip to set FK to null and continue."
                 
                 circular_reference:
                   summary: Circular parent_id reference detected

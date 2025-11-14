@@ -47,8 +47,16 @@ def _parse_node_definition(
     Returns:
         True if a node was parsed, False otherwise
     """
-    # Parse node definitions: node_id["Label<br/>field: value"]
-    node_match = re.match(r'(\w+)\["([^"]+)"\]', line)
+    # Parse node definitions with standard Mermaid syntax:
+    # node_id[Label], node_id(Label), node_id{Label}, node_id((Label)), node_id[[Label]]
+    # Also supports legacy syntax with quotes: node_id["Label"]
+    node_match = re.match(
+        r"(\w+)"  # Node ID
+        r"[\[\(\{]+"  # Opening bracket(s): [, (, {, ((, [[
+        r'"?([^"\]\)\}]+)"?'  # Label (with optional quotes)
+        r"[\]\)\}]+",  # Closing bracket(s): ], ), }, )), ]]
+        line,
+    )
     if not node_match:
         return False
 
@@ -109,10 +117,12 @@ def _parse_flowchart_lines(
         ):
             continue
 
-        # Parse edges (relationships): node1 --> node2
-        edge_match = re.match(r"(\w+)\s*-->\s*(\w+)", line)
+        # Parse edges (relationships): node1 --> node2 (or other arrow types)
+        # Supports: -->, ---, ==>, -.->
+        edge_match = re.match(r"(\w+)\s*(-+>?|=+>|\.+-?>)\s*(\w+)", line)
         if edge_match:
-            parent_id, child_id = edge_match.groups()
+            parent_id = edge_match.group(1)
+            child_id = edge_match.group(3)
             relationships.append((parent_id, child_id))
             continue
 
@@ -131,13 +141,18 @@ def _parse_flowchart(lines: List[str]) -> List[Dict[str, Any]]:
     Returns:
         List of records extracted from the diagram
     """
+    # Parse metadata to check if this is a tree structure
+    metadata = _parse_metadata(lines)
+    is_tree = metadata.get("is_tree", "false").lower() == "true"
+
     records, relationships = _parse_flowchart_lines(lines)
 
-    # Apply relationships to establish parent_id
-    for parent_node_id, child_node_id in relationships:
-        if child_node_id in records and parent_node_id in records:
-            parent_original_id = records[parent_node_id].get("id")
-            records[child_node_id]["parent_id"] = parent_original_id
+    # Apply relationships to establish parent_id ONLY if tree structure
+    if is_tree:
+        for parent_node_id, child_node_id in relationships:
+            if child_node_id in records and parent_node_id in records:
+                parent_original_id = records[parent_node_id].get("id")
+                records[child_node_id]["parent_id"] = parent_original_id
 
     return list(records.values())
 
@@ -151,6 +166,10 @@ def _parse_graph(lines: List[str]) -> List[Dict[str, Any]]:
     Returns:
         List of records extracted from the diagram
     """
+    # Parse metadata to check if this is a tree structure
+    metadata = _parse_metadata(lines)
+    is_tree = metadata.get("is_tree", "false").lower() == "true"
+
     records = {}
     relationships = []
 
@@ -162,17 +181,27 @@ def _parse_graph(lines: List[str]) -> List[Dict[str, Any]]:
         if line.startswith("%%") or not line or line.startswith("graph"):
             continue
 
-        # Parse edges: node1 --- node2
-        edge_match = re.match(r"(\w+)\s*---\s*(\w+)", line)
+        # Parse edges: node1 --> node2 (or other arrow types)
+        # Supports: -->, ---, ==>, -.->
+        edge_match = re.match(r"(\w+)\s*(-+>?|=+>|\.+-?>)\s*(\w+)", line)
         if edge_match:
-            parent_id, child_id = edge_match.groups()
+            parent_id = edge_match.group(1)
+            child_id = edge_match.group(3)
             relationships.append((parent_id, child_id))
             continue
 
-        # Parse node definitions: node_id["Label"]
-        node_match = re.match(r'(\w+)\["([^"]+)"\]', line)
+        # Parse node definitions with standard Mermaid syntax
+        # Supports: [Label], (Label), {Label}, ((Label)), [[Label]], ["Label"]
+        node_match = re.match(
+            r"(\w+)"  # Node ID
+            r"[\[\(\{]+"  # Opening bracket(s)
+            r'"?([^"\]\)\}]+)"?'  # Label (with optional quotes)
+            r"[\]\)\}]+",  # Closing bracket(s)
+            line,
+        )
         if node_match:
-            node_id, label = node_match.groups()
+            node_id = node_match.group(1)
+            label = node_match.group(2)
 
             # Convert node_id back to original ID
             original_id = node_id.replace("node_", "").replace("_", "-")
@@ -180,11 +209,12 @@ def _parse_graph(lines: List[str]) -> List[Dict[str, Any]]:
             record = {"id": original_id, "name": label}
             records[node_id] = record
 
-        # Apply relationships
-    for parent_node_id, child_node_id in relationships:
-        if child_node_id in records and parent_node_id in records:
-            parent_original_id = records[parent_node_id].get("id")
-            records[child_node_id]["parent_id"] = parent_original_id
+    # Apply relationships to establish parent_id ONLY if tree structure
+    if is_tree:
+        for parent_node_id, child_node_id in relationships:
+            if child_node_id in records and parent_node_id in records:
+                parent_original_id = records[parent_node_id].get("id")
+                records[child_node_id]["parent_id"] = parent_original_id
 
     return list(records.values())
 
@@ -207,11 +237,14 @@ def _extract_mindmap_label(label: str) -> Optional[str]:
     return label if label else None
 
 
-def _parse_mindmap(lines: List[str]) -> List[Dict[str, Any]]:
+def _parse_mindmap(
+    lines: List[str], company_id: Optional[str] = None
+) -> List[Dict[str, Any]]:
     """Parse a Mermaid mindmap diagram.
 
     Args:
         lines: List of lines from the diagram
+        company_id: Company ID to add to records (required for organization_units)
 
     Returns:
         List of records extracted from the diagram
@@ -239,6 +272,10 @@ def _parse_mindmap(lines: List[str]) -> List[Dict[str, Any]]:
         # Generate ID from label (simple approach)
         record_id = f"node-{len(records) + 1}"
         record = {"id": record_id, "name": label}
+
+        # Add company_id if provided (required for organization_units)
+        if company_id:
+            record["company_id"] = company_id
 
         # Determine parent based on indentation
         # Pop stack until we find the right parent level
@@ -275,6 +312,58 @@ def _detect_diagram_type(content: str) -> Optional[str]:
             return "mindmap"
 
     return None
+
+
+def _validate_mermaid_syntax(content: str, diagram_type: str) -> None:
+    """Validate basic Mermaid syntax before parsing.
+
+    Args:
+        content: The Mermaid diagram content
+        diagram_type: Type of diagram (flowchart, graph, mindmap)
+
+    Raises:
+        ValueError: If syntax is invalid with descriptive error message
+    """
+    lines = content.strip().split("\n")
+
+    # Check for unclosed brackets in each line
+    for i, line in enumerate(lines, 1):
+        # Skip comments and declaration lines
+        if line.strip().startswith("%%") or line.strip().startswith(
+            diagram_type
+        ):
+            continue
+
+        # Count opening and closing brackets
+        open_brackets = line.count("[") + line.count("(") + line.count("{")
+        close_brackets = line.count("]") + line.count(")") + line.count("}")
+
+        if open_brackets != close_brackets:
+            raise ValueError(
+                f"Line {i}: Unclosed bracket detected: {line.strip()}"
+            )
+
+    # Check for malformed arrows (double arrows, too many dashes, etc.)
+    invalid_arrow_pattern = re.compile(r"(->->|-->-->|------|====|>\s*>)")
+    for i, line in enumerate(lines, 1):
+        if invalid_arrow_pattern.search(line):
+            raise ValueError(
+                f"Line {i}: Invalid arrow syntax detected: {line.strip()}"
+            )
+
+    # Check for duplicate node IDs (basic check)
+    node_pattern = re.compile(r"^[\s]*(\w+)[\[\(\{]")
+    node_ids = []
+    for line in lines:
+        match = node_pattern.search(line)
+        if match:
+            node_ids.append(match.group(1))
+
+    duplicates = [nid for nid in set(node_ids) if node_ids.count(nid) > 1]
+    if duplicates:
+        raise ValueError(
+            f"Duplicate node ID(s) detected: {', '.join(duplicates)}"
+        )
 
 
 def _topological_sort(
@@ -352,13 +441,17 @@ def _import_records(
         ):
             record["parent_id"] = report["id_mapping"][record["parent_id"]]
 
-        # Remove metadata fields
-        record.pop("id", None)  # Server will assign new ID
+        # Remove read-only fields before POST
+        # Note: parent_id is intentionally kept if present for tree structures
+        readonly_fields = {"id", "created_at", "updated_at", "children"}
+        clean_record = {
+            k: v for k, v in record.items() if k not in readonly_fields
+        }
 
         try:
             response = requests.post(
                 target_url,
-                json=record,
+                json=clean_record,
                 cookies=cookies,
                 timeout=30,
             )
@@ -399,8 +492,17 @@ def import_mermaid() -> Response:
     Returns:
         JSON response with import report
     """
+    # Get parameters
+    target_url = request.values.get("url")
+
+    logger.info(
+        f"Mermaid import request - url={target_url}, "
+        f"file={request.files.get('file').filename if 'file' in request.files else None}"
+    )
+
     # Validate file upload
     if "file" not in request.files:
+        logger.error("No file uploaded")
         return Response(
             '{"message": "No file uploaded"}',
             status=400,
@@ -409,6 +511,7 @@ def import_mermaid() -> Response:
 
     file: FileStorage = request.files["file"]
     if file.filename == "":
+        logger.error("No file selected")
         return Response(
             '{"message": "No file selected"}',
             status=400,
@@ -417,8 +520,10 @@ def import_mermaid() -> Response:
 
     try:
         # Read Mermaid content
+        logger.info(f"Reading Mermaid file: {file.filename}")
         content = file.read().decode("utf-8")
         lines = content.split("\n")
+        logger.info(f"File contains {len(lines)} lines")
 
         # Parse metadata
         metadata = _parse_metadata(lines)
@@ -427,8 +532,22 @@ def import_mermaid() -> Response:
         # Detect diagram type
         diagram_type = _detect_diagram_type(content)
         if not diagram_type:
+            logger.error("Could not detect diagram type")
             return Response(
                 '{"message": "Could not detect Mermaid diagram type"}',
+                status=400,
+                mimetype=MIME_JSON,
+            )
+
+        logger.info(f"Detected diagram type: {diagram_type}")
+
+        # Validate syntax before parsing
+        try:
+            _validate_mermaid_syntax(content, diagram_type)
+        except ValueError as exc:
+            logger.error(f"Mermaid syntax validation failed: {exc}")
+            return Response(
+                json.dumps({"message": f"Invalid Mermaid syntax: {str(exc)}"}),
                 status=400,
                 mimetype=MIME_JSON,
             )
@@ -439,8 +558,11 @@ def import_mermaid() -> Response:
         elif diagram_type == "graph":
             records = _parse_graph(lines)
         elif diagram_type == "mindmap":
-            records = _parse_mindmap(lines)
+            # Extract company_id from query params for organization_units
+            company_id = request.values.get("company_id")
+            records = _parse_mindmap(lines, company_id)
         else:
+            logger.error(f"Unsupported diagram type: {diagram_type}")
             return Response(
                 f'{{"message": "Unsupported diagram type: {diagram_type}"}}',
                 status=400,
@@ -454,11 +576,14 @@ def import_mermaid() -> Response:
         # Get target URL from query params
         target_url = request.values.get("url")
         if not target_url:
+            logger.error("Missing 'url' parameter")
             return Response(
                 '{"message": "Missing required parameter: url"}',
                 status=400,
                 mimetype=MIME_JSON,
             )
+
+        logger.info(f"Target URL: {target_url}")
 
         # Sort records if they have parent_id (tree structure)
         has_parent = any("parent_id" in r for r in records)
@@ -468,6 +593,7 @@ def import_mermaid() -> Response:
 
         # Import records
         cookies = {"access_token": request.cookies.get("access_token")}
+        logger.info(f"Starting import of {len(records)} records")
         result = _import_records(records, target_url, cookies)
 
         logger.info(
@@ -488,10 +614,18 @@ def import_mermaid() -> Response:
             status=400,
             mimetype=MIME_JSON,
         )
-    except Exception as exc:  # pylint: disable=broad-except
-        logger.error(f"Import failed: {exc}")
+    except ValueError as exc:
+        # Data validation errors (malformed diagram, invalid structure)
+        logger.error(f"Data validation error: {exc}")
         return Response(
-            f'{{"message": "Import failed: {str(exc)}"}}',
+            f'{{"error": "Invalid Mermaid data", "detail": "{str(exc)}"}}',
+            status=400,
+            mimetype=MIME_JSON,
+        )
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.error(f"Import failed: {exc}", exc_info=True)
+        return Response(
+            f'{{"error": "Internal server error", "detail": "{str(exc)}"}}',
             status=500,
             mimetype=MIME_JSON,
         )

@@ -239,7 +239,8 @@ class TestResolveReference:
 
         assert status == "resolved"
         assert resolved_id == "new-uuid-1"
-        assert candidates == []
+        assert len(candidates) == 1
+        assert candidates[0]["id"] == "new-uuid-1"
         assert error is None
 
     @patch("app.utils.reference_resolver.requests.get")

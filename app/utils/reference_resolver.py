@@ -15,6 +15,8 @@ from collections import defaultdict, deque
 
 import requests
 
+from app.logger import logger
+
 
 # UUID pattern for detecting foreign key fields
 UUID_PATTERN = re.compile(
@@ -22,10 +24,44 @@ UUID_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Common plural forms for resource types
+PLURALIZATION_MAP = {
+    "company": "companies",
+    "category": "categories",
+    "entity": "entities",
+    "activity": "activities",
+}
+
+
+def pluralize(word: str) -> str:
+    """Convert a singular word to plural form.
+
+    Args:
+        word: Singular form of the word
+
+    Returns:
+        Plural form of the word
+    """
+    # Check custom mappings first
+    if word in PLURALIZATION_MAP:
+        return PLURALIZATION_MAP[word]
+
+    # Apply simple English pluralization rules
+    if word.endswith("y") and len(word) > 1 and word[-2] not in "aeiou":
+        return word[:-1] + "ies"
+    if word.endswith(("s", "x", "z", "ch", "sh")):
+        return word + "es"
+    return word + "s"
+
+
 # Default lookup fields for common resource types
 DEFAULT_LOOKUP_CONFIG = {
     "users": ["email"],
     "companies": ["name"],
+    "positions": ["title"],
+    "organization_units": ["name"],
+    "customers": ["name"],
+    "subcontractors": ["name"],
     "projects": ["name"],
     "tasks": ["name"],
     "roles": ["name"],
@@ -51,7 +87,7 @@ def detect_foreign_keys(record: Dict[str, Any]) -> List[str]:
     """Detect foreign key fields in a record.
 
     Foreign keys are identified as fields ending with '_id' or '_uuid'
-    that contain valid UUID values.
+    that contain valid UUID values. Excludes technical/metadata fields.
 
     Args:
         record: The data record to analyze
@@ -59,8 +95,13 @@ def detect_foreign_keys(record: Dict[str, Any]) -> List[str]:
     Returns:
         List of field names that are foreign keys
     """
+    # Technical fields that look like FKs but aren't real foreign keys
+    excluded_fields = {"_original_id", "id"}
+
     fk_fields = []
     for field_name, field_value in record.items():
+        if field_name in excluded_fields:
+            continue
         if field_name.endswith(("_id", "_uuid")) and is_uuid(field_value):
             fk_fields.append(field_name)
     return fk_fields
@@ -101,20 +142,62 @@ def get_resource_type_from_url(url: str) -> str:
     return parts[-1] if parts else ""
 
 
+def _fetch_lookup_value(
+    base_url: str,
+    resource_type: str,
+    resource_id: str,
+    lookup_field: str,
+    cookies: Dict,
+) -> Optional[Any]:
+    """Fetch lookup value from a referenced resource.
+
+    Args:
+        base_url: Base URL of the service
+        resource_type: Type of resource (e.g., 'users', 'projects')
+        resource_id: ID of the referenced resource
+        lookup_field: Field name to extract for lookup
+        cookies: Authentication cookies
+
+    Returns:
+        The lookup value, or None if fetch fails
+    """
+    try:
+        fetch_url = f"{base_url.rstrip('/')}/{resource_type}/{resource_id}"
+        logger.debug(f"Fetching lookup value from {fetch_url}")
+        response = requests.get(fetch_url, cookies=cookies, timeout=10)
+        if response.status_code == 200:
+            referenced_record = response.json()
+            value = referenced_record.get(lookup_field)
+            logger.debug(f"Fetched lookup value: {lookup_field}={value}")
+            return value
+        logger.warning(
+            f"Failed to fetch {fetch_url}: status={response.status_code}"
+        )
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        # Defensive: catch all exceptions to avoid breaking export
+        # Import will handle None gracefully
+        logger.warning(f"Exception fetching lookup value: {exc}")
+    return None
+
+
 def build_references_metadata(
     record: Dict[str, Any],
     fk_fields: List[str],
     lookup_config: Optional[Dict[str, List[str]]] = None,
+    base_url: Optional[str] = None,
+    cookies: Optional[Dict] = None,
 ) -> Dict[str, Dict[str, Any]]:
     """Build reference metadata for foreign key fields.
 
-    For each FK field, fetches the referenced resource and extracts
-    identifying fields for lookup during import.
+    For each FK field, creates reference metadata and optionally fetches
+    the lookup values from the referenced resources.
 
     Args:
         record: The data record containing foreign keys
         fk_fields: List of foreign key field names
         lookup_config: Custom lookup field configuration
+        base_url: Base URL of the service (e.g., http://service:5000)
+        cookies: Authentication cookies to use for fetching
 
     Returns:
         Dictionary mapping field names to reference metadata
@@ -136,18 +219,27 @@ def build_references_metadata(
         else:
             # Remove '_id' or '_uuid' suffix and pluralize
             base_name = field_name.replace("_id", "").replace("_uuid", "")
-            resource_type = f"{base_name}s"
+            resource_type = pluralize(base_name)
 
         # Get lookup fields for this resource type
         lookup_fields = lookup_config.get(
             resource_type, DEFAULT_LOOKUP_CONFIG.get(resource_type, ["name"])
         )
 
+        lookup_field = lookup_fields[0]  # Use first lookup field
+        lookup_value = None
+
+        # Fetch the actual lookup value if base_url is provided
+        if base_url and cookies is not None:
+            lookup_value = _fetch_lookup_value(
+                base_url, resource_type, fk_value, lookup_field, cookies
+            )
+
         references[field_name] = {
             "resource_type": resource_type,
             "original_id": fk_value,
-            "lookup_field": lookup_fields[0],  # Use first lookup field
-            "lookup_value": None,  # Will be filled by fetch
+            "lookup_field": lookup_field,
+            "lookup_value": lookup_value,
         }
 
     return references
@@ -157,6 +249,8 @@ def enrich_record(
     record: Dict[str, Any],
     lookup_config: Optional[Dict[str, List[str]]] = None,
     parent_field: Optional[str] = None,
+    base_url: Optional[str] = None,
+    cookies: Optional[Dict] = None,
 ) -> Dict[str, Any]:
     """Enrich a record with reference metadata.
 
@@ -164,6 +258,8 @@ def enrich_record(
         record: The data record to enrich
         lookup_config: Custom lookup field configuration
         parent_field: Name of parent field to exclude from enrichment
+        base_url: Base URL of the service for fetching lookup values
+        cookies: Authentication cookies for API calls
 
     Returns:
         Enriched record with _references metadata
@@ -179,11 +275,11 @@ def enrich_record(
     if not fk_fields:
         return record
 
-    # Build basic reference metadata
-    references = build_references_metadata(record, fk_fields, lookup_config)
+    # Build reference metadata (with optional lookup value fetching)
+    references = build_references_metadata(
+        record, fk_fields, lookup_config, base_url, cookies
+    )
 
-    # For now, we don't fetch actual values (would require API calls)
-    # This will be implemented when we have real service URLs
     enriched = record.copy()
     enriched["_references"] = references
 
@@ -222,13 +318,23 @@ def resolve_reference(
         )
 
     # Build query URL
+    # Note: Some services may not support query parameters, so we fetch all records
+    # and filter client-side for exact matches
     base_url = target_url.rstrip("/").rsplit("/", 1)[0]
-    query_url = f"{base_url}/{resource_type}?{lookup_field}={lookup_value}"
+    query_url = f"{base_url}/{resource_type}"
 
     try:
         response = requests.get(query_url, cookies=cookies, timeout=30)
         response.raise_for_status()
-        matches = response.json()
+        all_records = response.json()
+
+        # Filter for exact matches client-side
+        # This handles services that don't support query parameter filtering
+        matches = [
+            record
+            for record in all_records
+            if record.get(lookup_field) == lookup_value
+        ]
 
         if not matches:
             return (
@@ -241,7 +347,7 @@ def resolve_reference(
 
         if len(matches) == 1:
             # Exactly one match - resolved!
-            return "resolved", matches[0].get("id"), [], None
+            return "resolved", matches[0].get("id"), matches, None
 
         # Multiple matches - ambiguous
         return (

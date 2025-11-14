@@ -34,21 +34,28 @@ def _parse_csv_file(
         Tuple of (data, error_message)
     """
     if not file:
+        logger.error("No file provided in request")
         return None, "No file provided"
 
     if file.filename == "":
+        logger.error("Empty filename provided")
         return None, "Empty filename"
 
     if not file.filename.endswith(".csv"):
+        logger.error(f"Invalid file type: {file.filename}")
         return None, "File must be a CSV file (.csv)"
 
     try:
+        logger.info(f"Reading CSV file: {file.filename}")
         content = file.read().decode("utf-8")
         csv_reader = csv.DictReader(io.StringIO(content))
         data = list(csv_reader)
 
         if not data:
+            logger.error("CSV file is empty")
             return None, "CSV file is empty"
+
+        logger.info(f"CSV contains {len(data)} rows")
 
         # Convert CSV strings back to appropriate types
         parsed_data = []
@@ -56,11 +63,14 @@ def _parse_csv_file(
             parsed_row = _parse_csv_row(row)
             parsed_data.append(parsed_row)
 
+        logger.info(f"Successfully parsed {len(parsed_data)} records")
         return parsed_data, None
 
     except UnicodeDecodeError:
+        logger.error("File encoding error - not UTF-8")
         return None, "File encoding must be UTF-8"
     except csv.Error as exc:
+        logger.error(f"CSV parsing error: {exc}")
         return None, f"Invalid CSV format: {exc}"
 
 
@@ -80,7 +90,8 @@ def _parse_csv_row(row: Dict[str, str]) -> Dict[str, Any]:
     """
     parsed = {}
     for key, value in row.items():
-        if value == "":
+        # Handle None or empty string
+        if value is None or value == "":
             parsed[key] = None
         elif value.startswith("{") or value.startswith("["):
             # Try to parse as JSON
@@ -131,6 +142,8 @@ def _import_records(  # pylint: disable=too-many-locals
     cookies: Dict[str, str],
     resolve_fks: bool,
     parent_field: Optional[str],
+    on_ambiguous: str = "skip",
+    on_missing: str = "skip",
 ) -> Dict[str, Any]:
     """Import records to target service.
 
@@ -140,10 +153,13 @@ def _import_records(  # pylint: disable=too-many-locals
         cookies: Authentication cookies
         resolve_fks: Whether to resolve foreign key references
         parent_field: Parent field name if tree structure
+        on_ambiguous: How to handle ambiguous references ("skip" or "fail")
+        on_missing: How to handle missing references ("skip" or "fail")
 
     Returns:
         Import result dictionary with statistics
     """
+    logger.info(f"Starting import of {len(data)} records to {target_url}")
     id_mapping = {}
     import_report = {"success": 0, "failed": 0, "errors": []}
     resolution_report = {
@@ -157,13 +173,23 @@ def _import_records(  # pylint: disable=too-many-locals
         try:
             # Extract _original_id
             original_id = record.get("_original_id")
+            logger.debug(f"Processing record with _original_id={original_id}")
 
-            # Remove metadata fields before import
+            # Remove metadata and read-only fields before import
+            readonly_fields = {
+                "id",
+                "created_at",
+                "updated_at",
+                "children",
+            }
             clean_record = {
                 k: v
                 for k, v in record.items()
-                if not k.startswith("_") and v is not None
+                if not k.startswith("_")
+                and k not in readonly_fields
+                and v is not None
             }
+            logger.debug(f"Cleaned record: {list(clean_record.keys())}")
 
             # Resolve parent reference if tree structure
             if parent_field and parent_field in clean_record:
@@ -177,6 +203,9 @@ def _import_records(  # pylint: disable=too-many-locals
 
             # Resolve foreign key references if requested
             if resolve_fks and "_references" in record:
+                logger.debug(
+                    f"Resolving FKs: {list(record['_references'].keys())}"
+                )
                 _resolve_references(
                     clean_record,
                     record["_references"],
@@ -184,9 +213,12 @@ def _import_records(  # pylint: disable=too-many-locals
                     cookies,
                     id_mapping,
                     resolution_report,
+                    on_ambiguous,
+                    on_missing,
                 )
 
             # POST to target service
+            logger.debug(f"POSTing to {target_url}: {clean_record}")
             response = requests.post(
                 target_url, json=clean_record, cookies=cookies, timeout=30
             )
@@ -202,7 +234,16 @@ def _import_records(  # pylint: disable=too-many-locals
             import_report["success"] += 1
 
         except requests.exceptions.HTTPError as exc:
-            error_msg = f"Failed to import record: {exc.response.status_code}"
+            error_detail = ""
+            try:
+                error_detail = exc.response.json()
+            except Exception:  # pylint: disable=broad-except
+                error_detail = exc.response.text
+
+            error_msg = (
+                f"Failed to import record (original_id={original_id}): "
+                f"HTTP {exc.response.status_code} - {error_detail}"
+            )
             import_report["failed"] += 1
             import_report["errors"].append(error_msg)
             logger.error(error_msg)
@@ -227,6 +268,8 @@ def _resolve_references(
     cookies: Dict[str, str],
     id_mapping: Dict[str, str],
     resolution_report: Dict[str, Any],
+    on_ambiguous: str = "skip",
+    on_missing: str = "skip",
 ) -> None:
     """Resolve foreign key references in a record.
 
@@ -237,6 +280,8 @@ def _resolve_references(
         cookies: Auth cookies
         id_mapping: Existing ID mappings
         resolution_report: Report to update
+        on_ambiguous: How to handle ambiguous references ("skip" or "fail")
+        on_missing: How to handle missing references ("skip" or "fail")
     """
     for field_name, ref_metadata in references.items():
         if field_name not in record:
@@ -252,7 +297,7 @@ def _resolve_references(
             continue
 
         # Try reference resolution using metadata from export
-        status, resolved_id, _candidates, _error = resolve_reference(
+        status, resolved_id, candidates, error = resolve_reference(
             ref_metadata, target_url, cookies
         )
 
@@ -267,17 +312,39 @@ def _resolve_references(
                     "field": field_name,
                     "value": field_value,
                     "status": "ambiguous",
+                    "candidates": len(candidates),
                 }
             )
-        else:
+            # Handle ambiguous based on mode
+            if on_ambiguous == "skip":
+                record[field_name] = None
+                logger.warning(
+                    f"Ambiguous reference for {field_name}, setting to None (skip mode)"
+                )
+            else:  # fail mode
+                logger.warning(
+                    f"Ambiguous reference for {field_name} (fail mode will reject import)"
+                )
+        else:  # missing
             resolution_report["missing"] += 1
             resolution_report["details"].append(
                 {
                     "field": field_name,
                     "value": field_value,
                     "status": "missing",
+                    "error": error,
                 }
             )
+            # Handle missing based on mode
+            if on_missing == "skip":
+                record[field_name] = None
+                logger.warning(
+                    f"Missing reference for {field_name}, setting to None (skip mode)"
+                )
+            else:  # fail mode
+                logger.warning(
+                    f"Missing reference for {field_name} (fail mode will reject import)"
+                )
 
 
 #
@@ -289,6 +356,8 @@ def import_csv():
         url: Target service URL
         resolve_foreign_keys: Whether to resolve FK references (default: true)
         lookup_fields: Comma-separated fields for FK lookup (default: name)
+        on_ambiguous: How to handle ambiguous references - "skip" or "fail" (default: "skip")
+        on_missing: How to handle missing references - "skip" or "fail" (default: "skip")
 
     Returns:
         JSON response with import statistics
@@ -300,6 +369,8 @@ def import_csv():
         url: http://service/api/users
         resolve_foreign_keys: true
         lookup_fields: name,code
+        on_ambiguous: skip
+        on_missing: skip
     """
     try:
         # Parse parameters
@@ -308,25 +379,81 @@ def import_csv():
         resolve_fks = (
             request.form.get("resolve_foreign_keys", "true").lower() == "true"
         )
+        on_ambiguous = request.form.get("on_ambiguous", "skip").lower()
+        on_missing = request.form.get("on_missing", "skip").lower()
+
+        # Validate mode parameters
+        if on_ambiguous not in ["skip", "fail"]:
+            return {
+                "error": f"Invalid on_ambiguous mode: {on_ambiguous}. Must be 'skip' or 'fail'"
+            }, 400
+        if on_missing not in ["skip", "fail"]:
+            return {
+                "error": f"Invalid on_missing mode: {on_missing}. Must be 'skip' or 'fail'"
+            }, 400
+
+        logger.info(
+            f"CSV import request - url={target_url}, "
+            f"resolve_fks={resolve_fks}, "
+            f"on_ambiguous={on_ambiguous}, "
+            f"on_missing={on_missing}, "
+            f"file={file.filename if file else None}"
+        )
 
         if not target_url:
+            logger.error("Missing 'url' parameter")
             return {"error": "Missing 'url' parameter"}, 400
 
         # Parse CSV file
         data, error = _parse_csv_file(file)
         if error:
+            logger.error(f"CSV parsing failed: {error}")
             return {"error": error}, 400
 
         logger.info(f"Parsed {len(data)} records from CSV")
 
         # Prepare data
-        prepared_data, parent_field = _prepare_data(data)
+        try:
+            prepared_data, parent_field = _prepare_data(data)
+        except (ValueError, KeyError, AttributeError) as exc:
+            logger.error(f"Data preparation failed: {exc}")
+            return {"error": f"Invalid CSV data structure: {str(exc)}"}, 400
 
         # Import to target service
         cookies = {"access_token": request.cookies.get("access_token")}
         result = _import_records(
-            prepared_data, target_url, cookies, resolve_fks, parent_field
+            prepared_data,
+            target_url,
+            cookies,
+            resolve_fks,
+            parent_field,
+            on_ambiguous,
+            on_missing,
         )
+
+        # Check for resolution issues based on fail modes
+        if resolve_fks and result["resolution_report"]:
+            resolution_report = result["resolution_report"]
+
+            if on_ambiguous == "fail" and resolution_report["ambiguous"] > 0:
+                logger.error(
+                    f"Import aborted: {resolution_report['ambiguous']} ambiguous reference(s) "
+                    f"with on_ambiguous=fail mode"
+                )
+                return {
+                    "error": "Import failed due to ambiguous references",
+                    "resolution_report": resolution_report,
+                }, 400
+
+            if on_missing == "fail" and resolution_report["missing"] > 0:
+                logger.error(
+                    f"Import aborted: {resolution_report['missing']} missing reference(s) "
+                    f"with on_missing=fail mode"
+                )
+                return {
+                    "error": "Import failed due to missing references",
+                    "resolution_report": resolution_report,
+                }, 400
 
         logger.info(
             f"Import completed: {result['import_report']['success']} success, "
@@ -335,6 +462,15 @@ def import_csv():
 
         return result, 200
 
+    except ValueError as exc:
+        # Data validation errors (malformed data, invalid structure)
+        logger.error(f"Data validation error: {exc}")
+        return {"error": f"Invalid data: {str(exc)}"}, 400
+
     except Exception as exc:  # pylint: disable=broad-except
-        logger.error(f"Unexpected error during import: {exc}")
-        return {"error": "Internal server error"}, 500
+        # Truly unexpected errors
+        logger.error(f"Unexpected error during import: {exc}", exc_info=True)
+        return {
+            "error": "Internal server error",
+            "detail": str(exc),
+        }, 500

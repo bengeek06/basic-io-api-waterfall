@@ -123,9 +123,10 @@ See [`openapi.yml`](openapi.yml) for full API documentation.
 |-----------------------|---------|----------|---------|-------------|
 | `url`                 | string  | Yes      | -       | Target Waterfall service endpoint URL to import data to |
 | `type`                | string  | No       | `json`  | Import format: `json`, `csv`, or `mermaid` |
-| `resolve_foreign_keys`| boolean | No       | `true`  | Resolve foreign key references using enriched metadata |
-| `skip_on_ambiguous`   | boolean | No       | `true`  | Skip records with ambiguous references (multiple matches) |
-| `skip_on_missing`     | boolean | No       | `true`  | Skip records with missing references (no matches) |
+| `on_ambiguous`        | string  | No       | `skip`  | Behavior when FK reference has multiple matches: `skip` (set FK to null and continue) or `fail` (abort entire import with 400 error) |
+| `on_missing`          | string  | No       | `skip`  | Behavior when FK reference has no matches: `skip` (set FK to null and continue) or `fail` (abort entire import with 400 error) |
+| `detect_cycles`       | boolean | No       | `true`  | Detect and prevent circular parent_id references in tree structures |
+| `lookup_config`       | string  | No       | -       | JSON string defining custom lookup fields for reference resolution. Format: `{"users": ["email"], "projects": ["name"]}` |
 
 **Note:** The `enrich` parameter is highly recommended when exporting data that will be imported, as it enables automatic foreign key resolution during import.
 
@@ -207,6 +208,22 @@ Import users from CSV file:
 curl -X POST "http://localhost:5000/import?url=http://localhost:5001/api/users&type=csv" \
   --cookie "access_token=YOUR_JWT_TOKEN" \
   -F "file=@users_import.csv"
+```
+
+Import with fail-fast mode (abort on ambiguous or missing references):
+
+```bash
+curl -X POST "http://localhost:5000/import?url=http://localhost:5001/api/tasks&type=json&on_ambiguous=fail&on_missing=fail" \
+  --cookie "access_token=YOUR_JWT_TOKEN" \
+  -F "file=@tasks_export.json"
+```
+
+Import with lenient mode (skip problematic records, set FK to null):
+
+```bash
+curl -X POST "http://localhost:5000/import?url=http://localhost:5001/api/tasks&type=json&on_ambiguous=skip&on_missing=skip" \
+  --cookie "access_token=YOUR_JWT_TOKEN" \
+  -F "file=@tasks_export.json"
 ```
 
 Import with cycle detection disabled (use with caution):
@@ -704,14 +721,26 @@ curl -X GET "http://source/api/categories?type=mermaid&diagram_type=mindmap" \
 - **Authentication Failures**: Returns detailed error from target service
 - **Parsing Errors**: Returns 400 with specific line/column information
 - **Partial Import Failures**: Successful records are processed, failures logged in report
-- **Ambiguous References**: Records skipped by default, reported in `reference_resolutions`
-- **Missing References**: Records skipped by default, reported with suggestions
+- **Ambiguous References**: 
+  - `on_ambiguous=skip` (default): Set FK to null, continue import, report in `reference_resolutions`
+  - `on_ambiguous=fail`: Abort entire import with 400 error on first ambiguous reference
+- **Missing References**: 
+  - `on_missing=skip` (default): Set FK to null, continue import, report with suggestions
+  - `on_missing=fail`: Abort entire import with 400 error on first missing reference
 - **No Timeouts**: Service handles large datasets without timeout restrictions
 
-**Configuration**:
-- `skip_on_ambiguous=true` (default): Skip records with ambiguous references
-- `skip_on_missing=true` (default): Skip records with missing references
-- Set to `false` to fail entire import on first ambiguity/missing reference
+**Configuration Examples**:
+
+```bash
+# Lenient mode (default): Skip problematic records, set FK to null
+curl -X POST "http://localhost:5000/import?url=...&on_ambiguous=skip&on_missing=skip" ...
+
+# Strict mode: Fail fast on any reference issue
+curl -X POST "http://localhost:5000/import?url=...&on_ambiguous=fail&on_missing=fail" ...
+
+# Mixed mode: Skip ambiguous but fail on missing
+curl -X POST "http://localhost:5000/import?url=...&on_ambiguous=skip&on_missing=fail" ...
+```
 
 ---
 
