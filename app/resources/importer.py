@@ -38,7 +38,7 @@ class ImportResource(Resource):
             f"files={list(request.files.keys())}, "
             f"file={request.files.get('file').filename if 'file' in request.files else None}"
         )
-        
+
         import_type = request.values.get("type", "json").lower()
 
         # Validate import type

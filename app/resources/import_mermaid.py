@@ -157,6 +157,7 @@ def _parse_flowchart(lines: List[str]) -> List[Dict[str, Any]]:
     return list(records.values())
 
 
+# pylint: disable=too-many-locals
 def _parse_graph(lines: List[str]) -> List[Dict[str, Any]]:
     """Parse a Mermaid graph diagram.
 
@@ -477,6 +478,7 @@ def _import_records(
     return report
 
 
+# pylint: disable=too-many-branches,too-many-statements
 def import_mermaid() -> Response:
     """Import data from a Mermaid diagram file.
 
